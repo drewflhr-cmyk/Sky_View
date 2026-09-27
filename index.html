@@ -124,9 +124,9 @@
 
       <div class="divider"></div>
       <div class="sectionTitle">Solar Activity</div>
-      <div class="row"><span class="label">G-Scale</span><span class="val" id="gscaleVal">--</span></div>
-      <div class="noteSmall" id="gscaleNote">G1 Minor &middot; G2 Moderate &middot; G3 Strong &middot; G4 Severe &middot; G5 Extreme (geomagnetic storm level)</div>
-      <div class="row" style="margin-top:8px"><span class="label">Kp Index</span><span class="val" id="kpVal">--</span></div>
+      <div class="row"><span class="label">G-Scale (geomagnetic storm level)</span><span class="val" id="gscaleVal">--</span></div>
+      <div class="noteSmall" id="gscaleNote">G1 Minor &middot; G2 Moderate &middot; G3 Strong &middot; G4 Severe &middot; G5 Extreme</div>
+      <div class="row" style="margin-top:8px"><span class="label">Kp Index (geomagnetic disturbance)</span><span class="val" id="kpVal">--</span></div>
       <div class="noteSmall" id="kpNote">Scale 0&ndash;9 &middot; Kp5=G1 minor &middot; Kp6=G2 &middot; Kp7=G3 &middot; Kp8=G4 &middot; Kp9=G5 extreme</div>
       <div class="row" style="margin-top:8px"><span class="label">Solar Flare Activity (GOES X-Ray Scale)</span><span class="val" id="xrayVal">--</span></div>
       <div class="noteSmall" id="xrayNote">A &lt; B &lt; C &lt; M &lt; X, each class ~10&times; stronger &middot; M and X flares can affect radio/GPS</div>
@@ -767,17 +767,24 @@ async function fetchSolar(){
     if (g){ state.solar.gscale = g.Scale; state.solar.gscaleText = g.Text; }
   }
   if (kpR.status === "fulfilled" && Array.isArray(kpR.value) && kpR.value.length){
-    // The last one or two rows of this feed are sometimes still-provisional
-    // placeholders (missing/zeroed values), so scan backward for the most
-    // recent row that actually has a usable reading. estimated_kp is NOAA's
-    // finer-grained real-time estimate, so it's preferred over the coarser
-    // whole-number kp_index when both are present.
-    for (let i = kpR.value.length - 1; i >= 0; i--){
+    // A single row near the end of this feed can be a stale/provisional
+    // placeholder (missing or zeroed value), which made the display show a
+    // false "0" before. Instead of trusting one row, collect up to the last
+    // 5 rows that actually have a usable numeric reading (estimated_kp is
+    // NOAA's finer-grained real-time estimate, preferred over the coarser
+    // whole-number kp_index) and average them, so one bad row can't skew
+    // the result.
+    const recent = [];
+    for (let i = kpR.value.length - 1; i >= 0 && recent.length < 5; i--){
       const row = kpR.value[i];
       const est = typeof row.estimated_kp === "number" ? row.estimated_kp : null;
       const idx = typeof row.kp_index === "number" ? row.kp_index : null;
-      if (est != null){ state.solar.kp = Math.round(est); break; }
-      if (idx != null){ state.solar.kp = idx; break; }
+      if (est != null) recent.push(est);
+      else if (idx != null) recent.push(idx);
+    }
+    if (recent.length){
+      const avg = recent.reduce((a, b) => a + b, 0) / recent.length;
+      state.solar.kp = Math.round(avg);
     }
   }
   if (xrayR.status === "fulfilled"){
