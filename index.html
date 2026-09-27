@@ -126,8 +126,6 @@
       <div class="sectionTitle">Solar Activity</div>
       <div class="row"><span class="label">G-Scale (geomagnetic storm level)</span><span class="val" id="gscaleVal">--</span></div>
       <div class="noteSmall" id="gscaleNote">G1 Minor &middot; G2 Moderate &middot; G3 Strong &middot; G4 Severe &middot; G5 Extreme</div>
-      <div class="row" style="margin-top:8px"><span class="label">Kp Index (geomagnetic disturbance)</span><span class="val" id="kpVal">--</span></div>
-      <div class="noteSmall" id="kpNote">Scale 0&ndash;9 &middot; Kp5=G1 minor &middot; Kp6=G2 &middot; Kp7=G3 &middot; Kp8=G4 &middot; Kp9=G5 extreme</div>
       <div class="row" style="margin-top:8px"><span class="label">Solar Flare Activity (GOES X-Ray Scale)</span><span class="val" id="xrayVal">--</span></div>
       <div class="noteSmall" id="xrayNote">A &lt; B &lt; C &lt; M &lt; X, each class ~10&times; stronger &middot; M and X flares can affect radio/GPS</div>
       <div class="outlookLink" id="outlookToggle">NOAA Space Weather Advisory Outlook &#9662;</div>
@@ -568,7 +566,7 @@ const state = {
   launches: [],              // up to 2 upcoming launches
   launchError: "Loading…",   // shown only when there are zero launches to show
   detailsOpenIdx: -1,
-  solar: { gscale: null, gscaleText: null, kp: null, xrayClass: null, loaded: false },
+  solar: { gscale: null, gscaleText: null, xrayClass: null, loaded: false },
   outlook: { text: null, loaded: false, loading: false, open: false },
   mapObjects: [],             // tappable {x,y,r,name,desc} rebuilt every drawSky() call
 };
@@ -755,30 +753,15 @@ function escapeHtml(s){
 async function fetchSolar(){
   const results = await Promise.allSettled([
     fetch("https://services.swpc.noaa.gov/products/noaa-scales.json", { cache: "no-store" }).then((r) => r.json()),
-    fetch("https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json", { cache: "no-store" }).then((r) => r.json()),
     fetch("https://services.swpc.noaa.gov/json/goes/primary/xray-flares-latest.json", { cache: "no-store" }).then((r) => r.json()),
   ]);
 
-  const [scalesR, kpR, xrayR] = results;
+  const [scalesR, xrayR] = results;
   if (scalesR.status === "fulfilled"){
     // Entry "0" is today's NOAA scales (G/S/R), each with a Scale (0-5) + Text.
     const today = scalesR.value && scalesR.value["0"];
     const g = today && today.G;
     if (g){ state.solar.gscale = g.Scale; state.solar.gscaleText = g.Text; }
-  }
-  if (kpR.status === "fulfilled" && Array.isArray(kpR.value) && kpR.value.length){
-    // Switched from the noisy 1-minute "nowcast" feed (planetary_k_index_1m.json)
-    // to NOAA's official 3-hour observed planetary Kp product. The 1-minute feed
-    // is a rough real-time estimate that legitimately dips near zero right after
-    // each 3-hour period starts and sometimes trails off with placeholder rows —
-    // it was the real source of the false "0" readings. This product is the
-    // standard, stable Kp value (updated every 3 hours), so scan backward for
-    // the most recent row with a real numeric Kp.
-    for (let i = kpR.value.length - 1; i >= 0; i--){
-      const row = kpR.value[i];
-      const kp = typeof row.Kp === "number" ? row.Kp : null;
-      if (kp != null){ state.solar.kp = Math.round(kp); break; }
-    }
   }
   if (xrayR.status === "fulfilled"){
     const arr = xrayR.value;
@@ -794,9 +777,6 @@ function renderSolar(){
   const gEl = el("gscaleVal");
   if (s.gscale == null) gEl.textContent = s.loaded ? "unavailable" : "loading…";
   else gEl.textContent = (s.gscale === "0" || s.gscale === 0) ? "None" : ("G" + s.gscale + (s.gscaleText ? " (" + s.gscaleText + ")" : ""));
-
-  const kEl = el("kpVal");
-  kEl.textContent = s.kp != null ? s.kp : (s.loaded ? "unavailable" : "loading…");
 
   const xEl = el("xrayVal");
   xEl.textContent = s.xrayClass || (s.loaded ? "unavailable" : "loading…");
