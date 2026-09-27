@@ -327,6 +327,44 @@ const STARS = [
   {name:"Polaris",raH:2.5303,dec:89.264,mag:1.98},
 ];
 
+// A handful of easy-to-recognize constellations (J2000 RA/Dec), each as a small
+// set of member stars plus line segments connecting them by index, and an
+// "anchor" index used to place the name label.
+const CONSTELLATIONS = [
+  { name: "Orion", anchor: 0, stars: [
+      { raH: 5.9195, dec: 7.407 },    // 0 Betelgeuse
+      { raH: 5.4188, dec: 6.3497 },   // 1 Bellatrix
+      { raH: 5.5334, dec: -0.2991 },  // 2 Mintaka
+      { raH: 5.6036, dec: -1.2019 },  // 3 Alnilam
+      { raH: 5.6791, dec: -1.9426 },  // 4 Alnitak
+      { raH: 5.2423, dec: -8.202 },   // 5 Rigel
+      { raH: 5.7959, dec: -9.6696 },  // 6 Saiph
+    ], lines: [[0,1],[1,2],[2,3],[3,4],[4,0],[2,5],[4,6]] },
+  { name: "Big Dipper", anchor: 6, stars: [
+      { raH: 11.0622, dec: 61.7511 }, // 0 Dubhe
+      { raH: 11.0307, dec: 56.3824 }, // 1 Merak
+      { raH: 11.8972, dec: 53.6948 }, // 2 Phecda
+      { raH: 12.2571, dec: 57.0326 }, // 3 Megrez
+      { raH: 12.9004, dec: 55.9598 }, // 4 Alioth
+      { raH: 13.3988, dec: 54.9254 }, // 5 Mizar
+      { raH: 13.7923, dec: 49.3133 }, // 6 Alkaid
+    ], lines: [[0,1],[1,2],[2,3],[3,0],[3,4],[4,5],[5,6]] },
+  { name: "Cassiopeia", anchor: 2, stars: [
+      { raH: 0.1530, dec: 59.1498 },  // 0 Caph
+      { raH: 0.6751, dec: 56.5373 },  // 1 Schedar
+      { raH: 0.9451, dec: 60.7167 },  // 2 Gamma Cas
+      { raH: 1.4304, dec: 60.2353 },  // 3 Ruchbah
+      { raH: 1.9066, dec: 63.6701 },  // 4 Segin
+    ], lines: [[0,1],[1,2],[2,3],[3,4]] },
+  { name: "Scorpius", anchor: 2, stars: [
+      { raH: 16.0056, dec: -22.6217 }, // 0 Dschubba
+      { raH: 16.0906, dec: -19.8054 }, // 1 Graffias
+      { raH: 16.4901, dec: -26.432 },  // 2 Antares
+      { raH: 17.5601, dec: -37.1038 }, // 3 Shaula
+      { raH: 17.5128, dec: -37.2958 }, // 4 Lesath
+    ], lines: [[1,0],[0,2],[2,3],[3,4]] },
+];
+
 function issAltAz(lat, lon, issLat, issLon, issHeightKm){
   const R = 6371.0;
   const p = lat*RAD, l = lon*RAD, ps = issLat*RAD, ls = issLon*RAD;
@@ -708,7 +746,7 @@ function drawSky(now){
       state.mw = computeMilkyWay(now, state.lat, state.lon);
       state.mwCalcAt = now;
     }
-    let f = 0.55;
+    let f = 0.95;
     const dark = Math.max(0, Math.min(1, (-12 - sunH.alt) / 6));
     f *= dark;
     if (moon.alt > 0){
@@ -721,8 +759,8 @@ function drawSky(now){
       if (!u) continue;
       const p = toPx(u);
       const k = pt.level * f;
-      ctx.fillStyle = "rgba(190,190,220," + Math.min(0.9, k).toFixed(2) + ")";
-      const mwSize = 2.4 * sc;
+      ctx.fillStyle = "rgba(205,205,235," + Math.min(1, k).toFixed(2) + ")";
+      const mwSize = 3.0 * sc;
       ctx.fillRect(p.x - mwSize/2, p.y - mwSize/2, mwSize, mwSize);
     }
   }
@@ -740,6 +778,36 @@ function drawSky(now){
       const starR = (s.mag < 0.5 ? 2.0 : 1.4) * sc;
       ctx.beginPath(); ctx.arc(p.x, p.y, starR, 0, Math.PI*2); ctx.fill();
       drawLabel(ctx, s.name, p.x, p.y, "rgba(150,150,175,0.85)", W, labelFont);
+    }
+
+    // A few well-known constellation outlines (faint connecting lines + unlabeled
+    // member stars), so the map reads as a sky chart rather than just loose dots.
+    for (const c of CONSTELLATIONS){
+      const pts = c.stars.map((st) => {
+        const h = equatorialToHorizon(st.raH * 15, st.dec, lst, state.lat);
+        if (h.alt <= 0) return null;
+        const u = plotUnit(h.alt, h.az);
+        return u ? toPx(u) : null;
+      });
+      ctx.strokeStyle = "rgba(150,160,195,0.4)";
+      ctx.lineWidth = Math.max(1, sc * 0.6);
+      for (const [a, b] of c.lines){
+        if (pts[a] && pts[b]){
+          ctx.beginPath(); ctx.moveTo(pts[a].x, pts[a].y); ctx.lineTo(pts[b].x, pts[b].y); ctx.stroke();
+        }
+      }
+      ctx.fillStyle = "rgba(210,215,235,0.8)";
+      for (const p of pts){
+        if (!p) continue;
+        ctx.beginPath(); ctx.arc(p.x, p.y, 1.3 * sc, 0, Math.PI*2); ctx.fill();
+      }
+      const anchor = pts[c.anchor];
+      if (anchor){
+        ctx.font = Math.round(labelFont * 0.85) + "px -apple-system, sans-serif";
+        ctx.fillStyle = "rgba(155,165,200,0.75)";
+        ctx.textAlign = "center";
+        ctx.fillText(c.name, anchor.x, anchor.y - 11 * sc);
+      }
     }
   }
 
@@ -795,9 +863,9 @@ function drawSky(now){
 
   drawCompass(ctx, mapR * 0.28 + 10, H - mapR * 0.28 - 10, mapR * 0.16, labelFont);
 
-  ctx.textAlign = "left"; ctx.font = labelFont + "px -apple-system, sans-serif";
+  ctx.textAlign = "right"; ctx.font = labelFont + "px -apple-system, sans-serif";
   ctx.fillStyle = "rgba(120,120,145,0.85)";
-  ctx.fillText("center = overhead", 10, H - 12);
+  ctx.fillText("center = overhead", W - 10, H - 12);
 }
 
 function renderPanel(now){
