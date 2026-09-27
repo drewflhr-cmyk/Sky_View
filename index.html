@@ -644,33 +644,40 @@ function drawMoonDisc(g, cx, cy, r, A, lit, dark){
   }
 }
 
-function drawLabel(g, text, x, y, color, canvasW){
-  g.font = "11px -apple-system, sans-serif";
+function drawLabel(g, text, x, y, color, canvasW, fontPx){
+  g.font = fontPx + "px -apple-system, sans-serif";
   g.fillStyle = color;
   const w = g.measureText(text).width;
-  if (x + 6 + w <= canvasW - 4){ g.textAlign = "left"; g.fillText(text, x + 6, y + 3); }
-  else { g.textAlign = "right"; g.fillText(text, x - 6, y + 3); }
+  const pad = fontPx * 0.5;
+  if (x + pad + w <= canvasW - 4){ g.textAlign = "left"; g.fillText(text, x + pad, y + fontPx * 0.3); }
+  else { g.textAlign = "right"; g.fillText(text, x - pad, y + fontPx * 0.3); }
 }
 
-function drawCompass(g, cx, cy, r){
-  g.strokeStyle = "rgba(180,185,200,0.5)"; g.lineWidth = 1;
+function drawCompass(g, cx, cy, r, fontPx){
+  g.strokeStyle = "rgba(180,185,200,0.5)"; g.lineWidth = Math.max(1, r * 0.03);
   g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
   g.fillStyle = "#ff5a5a";
   g.beginPath(); g.moveTo(cx, cy - r*0.9); g.lineTo(cx - r*0.35, cy); g.lineTo(cx + r*0.35, cy); g.closePath(); g.fill();
   g.fillStyle = "rgba(180,185,200,0.6)";
   g.beginPath(); g.moveTo(cx, cy + r*0.9); g.lineTo(cx - r*0.35, cy); g.lineTo(cx + r*0.35, cy); g.closePath(); g.fill();
-  g.font = "11px -apple-system, sans-serif"; g.textAlign = "center";
+  g.font = fontPx + "px -apple-system, sans-serif"; g.textAlign = "center";
   g.fillStyle = "#ff5a5a"; g.fillText("E", cx, cy - r*1.6);
   g.fillStyle = "rgba(180,185,200,0.8)";
   g.fillText("W", cx, cy + r*1.75);
-  g.fillText("N", cx - r*1.7, cy + 4);
-  g.fillText("S", cx + r*1.7, cy + 4);
+  g.fillText("N", cx - r*1.7, cy + fontPx*0.35);
+  g.fillText("S", cx + r*1.7, cy + fontPx*0.35);
 }
 
 function drawSky(now){
   if (state.lat == null) return;
   const W = canvas.width, H = canvas.height;
   const mapCx = W/2, mapCy = H/2, mapR = Math.min(W,H) * 0.42;
+  // Every dot/icon/font size below is defined relative to mapR (not a fixed pixel
+  // count) so the map reads the same size whether it's drawn on a small, low-DPI
+  // screen or a large, high-DPI phone screen (iPhones report devicePixelRatio 2-3,
+  // which otherwise makes fixed-pixel drawing look tiny relative to the map).
+  const sc = mapR / 130;
+  const labelFont = Math.max(11, Math.round(13 * sc));
 
   const sunH = sunAltAz(now, state.lat, state.lon);
   const moon = moonAt(now, state.lat, state.lon);
@@ -715,7 +722,8 @@ function drawSky(now){
       const p = toPx(u);
       const k = pt.level * f;
       ctx.fillStyle = "rgba(190,190,220," + Math.min(0.9, k).toFixed(2) + ")";
-      ctx.fillRect(p.x - 1, p.y - 1, 2.4, 2.4);
+      const mwSize = 2.4 * sc;
+      ctx.fillRect(p.x - mwSize/2, p.y - mwSize/2, mwSize, mwSize);
     }
   }
 
@@ -729,8 +737,9 @@ function drawSky(now){
       if (!u) continue;
       const p = toPx(u);
       ctx.fillStyle = s.mag < 0.5 ? "#ffffff" : "rgba(210,210,220,0.85)";
-      ctx.beginPath(); ctx.arc(p.x, p.y, s.mag < 0.5 ? 1.6 : 1.1, 0, Math.PI*2); ctx.fill();
-      drawLabel(ctx, s.name, p.x, p.y, "rgba(150,150,175,0.85)", W);
+      const starR = (s.mag < 0.5 ? 2.0 : 1.4) * sc;
+      ctx.beginPath(); ctx.arc(p.x, p.y, starR, 0, Math.PI*2); ctx.fill();
+      drawLabel(ctx, s.name, p.x, p.y, "rgba(150,150,175,0.85)", W, labelFont);
     }
   }
 
@@ -742,8 +751,8 @@ function drawSky(now){
     if (!u) continue;
     const p = toPx(u);
     ctx.fillStyle = PLANETS[i].color;
-    ctx.beginPath(); ctx.arc(p.x, p.y, 3.2, 0, Math.PI*2); ctx.fill();
-    drawLabel(ctx, PLANETS[i].name, p.x, p.y, PLANETS[i].color, W);
+    ctx.beginPath(); ctx.arc(p.x, p.y, 4.5 * sc, 0, Math.PI*2); ctx.fill();
+    drawLabel(ctx, PLANETS[i].name, p.x, p.y, PLANETS[i].color, W, labelFont);
   }
 
   // ISS
@@ -755,8 +764,9 @@ function drawSky(now){
         const p = toPx(u);
         const c = state.iss.sunlit ? "#5be0ff" : "rgb(0,110,110)";
         ctx.fillStyle = c;
-        ctx.fillRect(p.x - 3, p.y - 3, 6, 6);
-        drawLabel(ctx, "ISS", p.x, p.y, c, W);
+        const issSize = 8 * sc;
+        ctx.fillRect(p.x - issSize/2, p.y - issSize/2, issSize, issSize);
+        drawLabel(ctx, "ISS", p.x, p.y, c, W, labelFont);
       }
     }
   }
@@ -766,9 +776,9 @@ function drawSky(now){
     const u = plotUnit(moon.alt, moon.az);
     if (u){
       const p = toPx(u);
-      const s = sunAt(dayNumber(now));
-      drawMoonDisc(ctx, p.x, p.y, 8, rev(moon.lon - s.lon), "#ebebe1", "#37373f");
-      drawLabel(ctx, "Moon", p.x + 4, p.y, "#ebebe1", W);
+      const s0 = sunAt(dayNumber(now));
+      drawMoonDisc(ctx, p.x, p.y, 11 * sc, rev(moon.lon - s0.lon), "#ebebe1", "#37373f");
+      drawLabel(ctx, "Moon", p.x + 11*sc, p.y, "#ebebe1", W, labelFont);
     }
   }
 
@@ -778,14 +788,14 @@ function drawSky(now){
     if (u){
       const p = toPx(u);
       ctx.fillStyle = "#ffd23f";
-      ctx.beginPath(); ctx.arc(p.x, p.y, 7, 0, Math.PI*2); ctx.fill();
-      drawLabel(ctx, "Sun", p.x + 4, p.y, "#ffd23f", W);
+      ctx.beginPath(); ctx.arc(p.x, p.y, 9.5 * sc, 0, Math.PI*2); ctx.fill();
+      drawLabel(ctx, "Sun", p.x + 9.5*sc, p.y, "#ffd23f", W, labelFont);
     }
   }
 
-  drawCompass(ctx, mapR * 0.28 + 10, H - mapR * 0.28 - 10, mapR * 0.16);
+  drawCompass(ctx, mapR * 0.28 + 10, H - mapR * 0.28 - 10, mapR * 0.16, labelFont);
 
-  ctx.textAlign = "left"; ctx.font = "11px -apple-system, sans-serif";
+  ctx.textAlign = "left"; ctx.font = labelFont + "px -apple-system, sans-serif";
   ctx.fillStyle = "rgba(120,120,145,0.85)";
   ctx.fillText("center = overhead", 10, H - 12);
 }
