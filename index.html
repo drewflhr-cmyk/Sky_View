@@ -25,7 +25,7 @@
   header .locBtn:active{background:var(--panel);}
   .layout{display:flex; flex:1; flex-wrap:wrap;}
   .mapPanel{position:relative; flex:1 1 320px; min-width:280px; display:flex;
-    align-items:center; justify-content:center; padding:10px;}
+    align-items:flex-start; justify-content:center; padding:10px;}
   .mapPanel canvas{width:100%; max-width:420px; aspect-ratio:1/1; display:block;}
   .stateBadge{position:absolute; top:16px; right:16px; font-size:0.75rem; padding:3px 9px;
     border-radius:10px; background:rgba(255,255,255,0.06); color:var(--dim);}
@@ -58,7 +58,7 @@
   .outlookBox{margin-top:8px; padding:10px 12px; border:1px solid var(--line); border-radius:10px;
     background:rgba(255,255,255,0.02); font-size:0.72rem; line-height:1.5; white-space:pre-wrap;
     max-height:280px; overflow:auto; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; color:#c7cbe0;}
-  .meteorRow{font-size:0.82rem; padding:6px 0 10px; color:var(--dim); line-height:1.4;}
+  .meteorRow{font-size:0.95rem; padding:6px 0 10px; color:var(--dim); line-height:1.4;}
   .meteorRow .name{color:var(--text); font-weight:600;}
   .modal{position:fixed; inset:0; background:rgba(0,0,0,0.6); display:none;
     align-items:center; justify-content:center; padding:16px; z-index:20;}
@@ -312,20 +312,20 @@ function phaseName(A){
 
 const PLANETS = [
   { name:"Mercury", N0:48.3313, N1:3.24587e-5, i0:7.0047, i1:5.00e-8, w0:29.1241, w1:1.01444e-5, a:0.387098, e0:0.205635, e1:5.59e-10, M0:168.6562, M1:4.0923344368, color:"rgb(190,190,190)",
-    desc:"The smallest planet and closest to the Sun, only slightly bigger than our Moon. It has almost no atmosphere to trap heat, so its surface swings from about 800°F in daytime to -290°F at night. A year there (one orbit of the Sun) is just 88 Earth days, but a single day (sunrise to sunrise) lasts about 176 Earth days." },
+    desc:"The smallest planet and closest to the Sun, only slightly bigger than our Moon. It has almost no atmosphere to trap heat, so its surface swings from about 800°F in daytime to -290°F at night — the largest temperature range of any planet. A year there (one orbit of the Sun) is just 88 Earth days, but a single day (sunrise to sunrise) lasts about 176 Earth days, because it spins so slowly relative to how fast it orbits. Its surface looks a lot like our Moon's — heavily cratered, with almost no weather to erode the impacts. Only two spacecraft have ever visited it (Mariner 10 and MESSENGER), because it's surprisingly hard to reach — a spacecraft has to shed a lot of speed to avoid just swinging past the Sun." },
   { name:"Venus",   N0:76.6799, N1:2.46590e-5, i0:3.3946, i1:2.75e-8, w0:54.8910, w1:1.38374e-5, a:0.723330, e0:0.006773, e1:-1.302e-9, M0:48.0052, M1:1.6021302244, color:"rgb(255,255,215)",
-    desc:"The hottest planet in the solar system — hotter even than Mercury — because its thick carbon-dioxide atmosphere traps heat in a runaway greenhouse effect, with surface temperatures around 900°F and crushing pressure. It's shrouded in reflective sulfuric-acid clouds, which is why it's usually the brightest point of light in the sky besides the Sun and Moon. It also spins backwards compared to most planets." },
+    desc:"The hottest planet in the solar system — hotter even than Mercury — because its thick carbon-dioxide atmosphere traps heat in a runaway greenhouse effect, with surface temperatures around 900°F (hot enough to melt lead) and pressure about 90 times Earth's, like being 3,000 feet underwater. It's shrouded in reflective sulfuric-acid clouds, which is why it's usually the brightest point of light in the sky besides the Sun and Moon — often called the 'morning star' or 'evening star.' It also spins backwards compared to most planets, and so slowly that one Venusian day is longer than its entire year. It's very similar in size to Earth and is sometimes called Earth's 'evil twin.'" },
   { name:"Mars",    N0:49.5574, N1:2.11081e-5, i0:1.8497, i1:-1.78e-8, w0:286.5016, w1:2.92961e-5, a:1.523688, e0:0.093405, e1:2.516e-9, M0:18.6021, M1:0.5240207766, color:"rgb(255,100,60)",
-    desc:"The 'Red Planet' — colored by iron oxide (rust) covering its dusty surface. Home to Olympus Mons, the largest known volcano in the solar system (about 2.5x taller than Mount Everest), and Valles Marineris, a canyon system long enough to stretch across the continental US. Several active rovers and orbiters are exploring it right now, searching for signs it once hosted liquid water." },
+    desc:"The 'Red Planet' — colored by iron oxide (rust) covering its dusty surface. Home to Olympus Mons, the largest known volcano in the solar system (about 2.5x taller than Mount Everest, wide enough to cover a small US state), and Valles Marineris, a canyon system long enough to stretch across the continental US. Its day is remarkably close to Earth's — about 24 hours 37 minutes — and it has two small, oddly-shaped moons, Phobos and Deimos, likely captured asteroids. Several active rovers and orbiters are exploring it right now, searching for signs it once hosted liquid water; it's the most explored planet besides Earth and a leading candidate for future crewed missions." },
   { name:"Jupiter", N0:100.4542, N1:2.76854e-5, i0:1.3030, i1:-1.557e-7, w0:273.8777, w1:1.64505e-5, a:5.20256, e0:0.048498, e1:4.469e-9, M0:19.8950, M1:0.0830853001, color:"rgb(245,210,160)",
-    desc:"The largest planet in the solar system — a gas giant more massive than every other planet combined, with a diameter about 11 times Earth's. Its Great Red Spot is a giant storm that's raged for at least 150 years. It has at least 95 known moons; even small binoculars can show its four largest (Io, Europa, Ganymede, Callisto), discovered by Galileo in 1610." },
+    desc:"The largest planet in the solar system — a gas giant more massive than every other planet combined, with a diameter about 11 times Earth's. Its Great Red Spot is a giant storm — wider than Earth — that's raged for at least 150 years, though it has been slowly shrinking. It has at least 95 known moons; even small binoculars can show its four largest (Io, Europa, Ganymede, Callisto), discovered by Galileo in 1610, the first moons ever found orbiting another planet. It spins faster than any other planet — a day is under 10 hours — which flattens it slightly at the poles, and its powerful magnetic field is the strongest of any planet, generating spectacular auroras. Its immense gravity acts like a cosmic shield, deflecting many comets and asteroids that might otherwise threaten the inner solar system." },
   { name:"Saturn",  N0:113.6634, N1:2.38980e-5, i0:2.4886, i1:-1.081e-7, w0:339.3939, w1:2.97661e-5, a:9.55475, e0:0.055546, e1:-9.499e-9, M0:316.9670, M1:0.0334442282, color:"rgb(235,205,100)",
-    desc:"Famous for its spectacular ring system, made of countless chunks of ice and rock ranging from dust-sized to house-sized, likely the remains of a shattered moon or comet. It's the second-largest planet in the solar system and the least dense — it would actually float in a big enough bathtub of water. A small telescope is enough to make out its rings." },
+    desc:"Famous for its spectacular ring system, made of countless chunks of ice and rock ranging from dust-sized to house-sized, likely the remains of a shattered moon or comet, or debris that never quite formed one. It's the second-largest planet in the solar system and the least dense — it would actually float in a big enough bathtub of water. A small telescope is enough to make out its rings, first correctly identified by Christiaan Huygens in 1655 (Galileo saw them decades earlier but couldn't tell what they were). It has at least 145 known moons, more than any other planet, including Titan — larger than the planet Mercury and the only moon in the solar system with a thick atmosphere and lakes of liquid methane." },
 ];
 
-const SUN_DESC = "Our star — a 4.6-billion-year-old ball of plasma about 93 million miles away, roughly 109 times wider than Earth. It's powered by nuclear fusion, converting hydrogen into helium in its core, and its light takes about 8 minutes to reach us. It's about halfway through its roughly 10-billion-year life as a normal, 'main sequence' star.";
-const MOON_DESC = "Earth's only natural satellite, roughly 239,000 miles away and about a quarter of Earth's diameter. It likely formed from debris after a Mars-sized object struck the young Earth. It's tidally locked, so it always shows us the same face, and its gravity is the main driver of ocean tides. Its rise/set times and phase shown here are calculated live for your location.";
-const ISS_DESC = "The International Space Station — a crewed research outpost orbiting about 250 miles up at roughly 17,500 mph, circling Earth every ~90 minutes (about 16 orbits a day). It's been continuously occupied since November 2000 by rotating crews of astronauts from multiple countries. It's easy to spot with the naked eye — often brighter than any star — because sunlight reflects off its large solar panels; it's shown bright/cyan here when sunlit, and dim when it's passing through Earth's shadow.";
+const SUN_DESC = "Our star — a 4.6-billion-year-old ball of plasma about 93 million miles away, roughly 109 times wider than Earth (over a million Earths could fit inside it by volume). It's powered by nuclear fusion, converting about 600 million tons of hydrogen into helium every second in its core, and its light takes about 8 minutes to reach us. Its surface temperature is around 10,000°F, but its core reaches roughly 27 million°F. It's about halfway through its roughly 10-billion-year life as a normal, 'main sequence' star; in about 5 billion years it will swell into a red giant, possibly engulfing Mercury and Venus. Its outer atmosphere (the corona) is, oddly, hundreds of times hotter than its visible surface — a mystery still being studied. Never look directly at it without proper solar filters.";
+const MOON_DESC = "Earth's only natural satellite, roughly 239,000 miles away (about a quarter-million miles) and about a quarter of Earth's diameter. It likely formed from debris after a Mars-sized object struck the young Earth around 4.5 billion years ago, and it's slowly drifting away from us — about 1.5 inches per year — meaning days on Earth were once shorter. It's tidally locked, so it always shows us the same face (the 'far side' was only first photographed in 1959), and its gravity is the main driver of ocean tides. Twelve astronauts walked on it during NASA's Apollo missions between 1969 and 1972. It has almost no atmosphere, so its surface temperature swings from about 250°F in sunlight to -250°F in shadow. Its rise/set times and phase shown here are calculated live for your location.";
+const ISS_DESC = "The International Space Station — a crewed research outpost orbiting about 250 miles up at roughly 17,500 mph, circling Earth every ~90 minutes (about 16 orbits a day, meaning its crew sees about 16 sunrises and sunsets daily). It's been continuously occupied since November 2000 by rotating crews of astronauts and cosmonauts from multiple countries (a joint project of the US, Russia, Europe, Japan, and Canada), and is roughly the size of a football field, making it the largest human-made object ever assembled in space. It's easy to spot with the naked eye — often brighter than any star, sometimes even outshining Venus — because sunlight reflects off its large solar panels; it's shown bright/cyan here when sunlit, and dim when it's passing through Earth's shadow. It's expected to be retired and deorbited sometime around 2030.";
 
 function planetAltAz(idx, t, lat, lon){
   const d = dayNumber(t);
@@ -755,7 +755,7 @@ function escapeHtml(s){
 async function fetchSolar(){
   const results = await Promise.allSettled([
     fetch("https://services.swpc.noaa.gov/products/noaa-scales.json", { cache: "no-store" }).then((r) => r.json()),
-    fetch("https://services.swpc.noaa.gov/json/planetary_k_index_1m.json", { cache: "no-store" }).then((r) => r.json()),
+    fetch("https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json", { cache: "no-store" }).then((r) => r.json()),
     fetch("https://services.swpc.noaa.gov/json/goes/primary/xray-flares-latest.json", { cache: "no-store" }).then((r) => r.json()),
   ]);
 
@@ -767,24 +767,17 @@ async function fetchSolar(){
     if (g){ state.solar.gscale = g.Scale; state.solar.gscaleText = g.Text; }
   }
   if (kpR.status === "fulfilled" && Array.isArray(kpR.value) && kpR.value.length){
-    // A single row near the end of this feed can be a stale/provisional
-    // placeholder (missing or zeroed value), which made the display show a
-    // false "0" before. Instead of trusting one row, collect up to the last
-    // 5 rows that actually have a usable numeric reading (estimated_kp is
-    // NOAA's finer-grained real-time estimate, preferred over the coarser
-    // whole-number kp_index) and average them, so one bad row can't skew
-    // the result.
-    const recent = [];
-    for (let i = kpR.value.length - 1; i >= 0 && recent.length < 5; i--){
+    // Switched from the noisy 1-minute "nowcast" feed (planetary_k_index_1m.json)
+    // to NOAA's official 3-hour observed planetary Kp product. The 1-minute feed
+    // is a rough real-time estimate that legitimately dips near zero right after
+    // each 3-hour period starts and sometimes trails off with placeholder rows —
+    // it was the real source of the false "0" readings. This product is the
+    // standard, stable Kp value (updated every 3 hours), so scan backward for
+    // the most recent row with a real numeric Kp.
+    for (let i = kpR.value.length - 1; i >= 0; i--){
       const row = kpR.value[i];
-      const est = typeof row.estimated_kp === "number" ? row.estimated_kp : null;
-      const idx = typeof row.kp_index === "number" ? row.kp_index : null;
-      if (est != null) recent.push(est);
-      else if (idx != null) recent.push(idx);
-    }
-    if (recent.length){
-      const avg = recent.reduce((a, b) => a + b, 0) / recent.length;
-      state.solar.kp = Math.round(avg);
+      const kp = typeof row.Kp === "number" ? row.Kp : null;
+      if (kp != null){ state.solar.kp = Math.round(kp); break; }
     }
   }
   if (xrayR.status === "fulfilled"){
