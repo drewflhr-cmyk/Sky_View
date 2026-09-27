@@ -53,6 +53,13 @@
     display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;}
   .tapHint{color:var(--accent); font-size:0.78rem; margin-top:6px;}
   .placeholder{color:var(--dimmer); font-size:0.88rem; padding:6px 0;}
+  .noteSmall{color:var(--dimmer); font-size:0.72rem; line-height:1.35; margin-top:2px;}
+  .outlookLink{color:#7fc7ff; font-size:0.85rem; margin-top:14px; cursor:pointer; display:inline-block;}
+  .outlookBox{margin-top:8px; padding:10px 12px; border:1px solid var(--line); border-radius:10px;
+    background:rgba(255,255,255,0.02); font-size:0.72rem; line-height:1.5; white-space:pre-wrap;
+    max-height:280px; overflow:auto; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; color:#c7cbe0;}
+  .meteorRow{font-size:0.82rem; padding:6px 0 10px; color:var(--dim); line-height:1.4;}
+  .meteorRow .name{color:var(--text); font-weight:600;}
   .modal{position:fixed; inset:0; background:rgba(0,0,0,0.6); display:none;
     align-items:center; justify-content:center; padding:16px; z-index:20;}
   .modal.open{display:flex;}
@@ -104,12 +111,27 @@
           <div class="pct" id="phasePct">--</div>
         </div>
       </div>
+      <div class="meteorRow" id="meteorShower">--</div>
 
       <div class="divider"></div>
-      <div class="sectionTitle">Next Launch</div>
-      <div class="launchBox" id="launchBox">
-        <div class="placeholder" id="launchPlaceholder">Loading…</div>
+      <div class="sectionTitle">Next 2 Florida Launches</div>
+      <div class="launchBox" id="launchBox0" style="margin-bottom:10px">
+        <div class="placeholder">Loading…</div>
       </div>
+      <div class="launchBox" id="launchBox1">
+        <div class="placeholder">Loading…</div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="sectionTitle">Solar Activity</div>
+      <div class="row"><span class="label">G-Scale</span><span class="val" id="gscaleVal">--</span></div>
+      <div class="noteSmall" id="gscaleNote">G1 Minor &middot; G2 Moderate &middot; G3 Strong &middot; G4 Severe &middot; G5 Extreme (geomagnetic storm level)</div>
+      <div class="row" style="margin-top:8px"><span class="label">Kp Index</span><span class="val" id="kpVal">--</span></div>
+      <div class="noteSmall" id="kpNote">Scale 0&ndash;9 &middot; Kp5=G1 minor &middot; Kp6=G2 &middot; Kp7=G3 &middot; Kp8=G4 &middot; Kp9=G5 extreme</div>
+      <div class="row" style="margin-top:8px"><span class="label">Solar Flare Activity (GOES X-Ray Scale)</span><span class="val" id="xrayVal">--</span></div>
+      <div class="noteSmall" id="xrayNote">A &lt; B &lt; C &lt; M &lt; X, each class ~10&times; stronger &middot; M and X flares can affect radio/GPS</div>
+      <div class="outlookLink" id="outlookToggle">NOAA Space Weather Advisory Outlook &#9662;</div>
+      <div class="outlookBox" id="outlookBox" style="display:none"></div>
     </div>
   </div>
 
@@ -151,6 +173,15 @@
     <div class="launchMeta" id="ldOrbit"></div>
     <div class="divider"></div>
     <div class="launchDesc" id="ldDesc" style="-webkit-line-clamp:unset; display:block;">--</div>
+  </div>
+</div>
+
+<!-- Sky-object info modal (tap any Sun/Moon/planet/star/constellation on the map) -->
+<div class="modal" id="objModal">
+  <div class="modalCard">
+    <div class="closeRow"><button id="objClose">Close</button></div>
+    <h2 id="objName">--</h2>
+    <div class="launchDesc" id="objDesc" style="-webkit-line-clamp:unset; display:block;">--</div>
   </div>
 </div>
 
@@ -280,12 +311,21 @@ function phaseName(A){
 }
 
 const PLANETS = [
-  { name:"Mercury", N0:48.3313, N1:3.24587e-5, i0:7.0047, i1:5.00e-8, w0:29.1241, w1:1.01444e-5, a:0.387098, e0:0.205635, e1:5.59e-10, M0:168.6562, M1:4.0923344368, color:"rgb(190,190,190)" },
-  { name:"Venus",   N0:76.6799, N1:2.46590e-5, i0:3.3946, i1:2.75e-8, w0:54.8910, w1:1.38374e-5, a:0.723330, e0:0.006773, e1:-1.302e-9, M0:48.0052, M1:1.6021302244, color:"rgb(255,255,215)" },
-  { name:"Mars",    N0:49.5574, N1:2.11081e-5, i0:1.8497, i1:-1.78e-8, w0:286.5016, w1:2.92961e-5, a:1.523688, e0:0.093405, e1:2.516e-9, M0:18.6021, M1:0.5240207766, color:"rgb(255,100,60)" },
-  { name:"Jupiter", N0:100.4542, N1:2.76854e-5, i0:1.3030, i1:-1.557e-7, w0:273.8777, w1:1.64505e-5, a:5.20256, e0:0.048498, e1:4.469e-9, M0:19.8950, M1:0.0830853001, color:"rgb(245,210,160)" },
-  { name:"Saturn",  N0:113.6634, N1:2.38980e-5, i0:2.4886, i1:-1.081e-7, w0:339.3939, w1:2.97661e-5, a:9.55475, e0:0.055546, e1:-9.499e-9, M0:316.9670, M1:0.0334442282, color:"rgb(235,205,100)" },
+  { name:"Mercury", N0:48.3313, N1:3.24587e-5, i0:7.0047, i1:5.00e-8, w0:29.1241, w1:1.01444e-5, a:0.387098, e0:0.205635, e1:5.59e-10, M0:168.6562, M1:4.0923344368, color:"rgb(190,190,190)",
+    desc:"The smallest planet and closest to the Sun. It has almost no atmosphere, so its surface swings from scorching to freezing, and a year there is just 88 Earth days." },
+  { name:"Venus",   N0:76.6799, N1:2.46590e-5, i0:3.3946, i1:2.75e-8, w0:54.8910, w1:1.38374e-5, a:0.723330, e0:0.006773, e1:-1.302e-9, M0:48.0052, M1:1.6021302244, color:"rgb(255,255,215)",
+    desc:"The hottest planet, thanks to a thick, crushing carbon-dioxide atmosphere that traps heat. It's usually the brightest point of light in the sky besides the Sun and Moon." },
+  { name:"Mars",    N0:49.5574, N1:2.11081e-5, i0:1.8497, i1:-1.78e-8, w0:286.5016, w1:2.92961e-5, a:1.523688, e0:0.093405, e1:2.516e-9, M0:18.6021, M1:0.5240207766, color:"rgb(255,100,60)",
+    desc:"The 'Red Planet' — colored by iron oxide (rust) covering its surface. Home to Olympus Mons, the largest known volcano in the solar system." },
+  { name:"Jupiter", N0:100.4542, N1:2.76854e-5, i0:1.3030, i1:-1.557e-7, w0:273.8777, w1:1.64505e-5, a:5.20256, e0:0.048498, e1:4.469e-9, M0:19.8950, M1:0.0830853001, color:"rgb(245,210,160)",
+    desc:"The largest planet in the solar system — a gas giant more massive than every other planet combined. Even small binoculars can show its four largest moons." },
+  { name:"Saturn",  N0:113.6634, N1:2.38980e-5, i0:2.4886, i1:-1.081e-7, w0:339.3939, w1:2.97661e-5, a:9.55475, e0:0.055546, e1:-9.499e-9, M0:316.9670, M1:0.0334442282, color:"rgb(235,205,100)",
+    desc:"Famous for its spectacular ring system, made of countless chunks of ice and rock. It's the second-largest planet in the solar system." },
 ];
+
+const SUN_DESC = "Our star — a 4.6-billion-year-old ball of plasma about 93 million miles away. Its light takes about 8 minutes to reach Earth.";
+const MOON_DESC = "Earth's only natural satellite, roughly 239,000 miles away. Its rise/set times and phase shown here are calculated live for your location.";
+const ISS_DESC = "The International Space Station — a crewed research outpost orbiting about 250 miles up at roughly 17,500 mph, circling Earth every ~90 minutes. It's bright and cyan-colored here when it's lit by sunlight.";
 
 function planetAltAz(idx, t, lat, lon){
   const d = dayNumber(t);
@@ -315,23 +355,32 @@ function planetAltAz(idx, t, lat, lon){
 }
 
 const STARS = [
-  {name:"Sirius",raH:6.7525,dec:-16.716,mag:-1.46},{name:"Canopus",raH:6.3992,dec:-52.696,mag:-0.74},
-  {name:"Arcturus",raH:14.2610,dec:19.182,mag:-0.05},{name:"Vega",raH:18.6156,dec:38.784,mag:0.03},
-  {name:"Capella",raH:5.2782,dec:45.998,mag:0.08},{name:"Rigel",raH:5.2423,dec:-8.202,mag:0.13},
-  {name:"Procyon",raH:7.6550,dec:5.225,mag:0.34},{name:"Betelgeuse",raH:5.9195,dec:7.407,mag:0.42},
-  {name:"Achernar",raH:1.6286,dec:-57.237,mag:0.46},{name:"Altair",raH:19.8464,dec:8.868,mag:0.76},
-  {name:"Aldebaran",raH:4.5987,dec:16.509,mag:0.86},{name:"Antares",raH:16.4901,dec:-26.432,mag:0.96},
-  {name:"Spica",raH:13.4199,dec:-11.161,mag:0.97},{name:"Pollux",raH:7.7553,dec:28.026,mag:1.14},
-  {name:"Fomalhaut",raH:22.9608,dec:-29.622,mag:1.16},{name:"Deneb",raH:20.6905,dec:45.280,mag:1.25},
-  {name:"Regulus",raH:10.1395,dec:11.967,mag:1.35},{name:"Castor",raH:7.5767,dec:31.888,mag:1.58},
-  {name:"Polaris",raH:2.5303,dec:89.264,mag:1.98},
+  {name:"Sirius",raH:6.7525,dec:-16.716,mag:-1.46,desc:"The brightest star in the night sky, about 8.6 light-years away — one of our nearest stellar neighbors."},
+  {name:"Canopus",raH:6.3992,dec:-52.696,mag:-0.74,desc:"The second-brightest star in the night sky, a massive, luminous giant roughly 310 light-years away."},
+  {name:"Arcturus",raH:14.2610,dec:19.182,mag:-0.05,desc:"An orange giant about 37 light-years away, the brightest star in the constellation Bootes."},
+  {name:"Vega",raH:18.6156,dec:38.784,mag:0.03,desc:"A bright, young, nearby star about 25 light-years away — one point of the 'Summer Triangle' asterism."},
+  {name:"Capella",raH:5.2782,dec:45.998,mag:0.08,desc:"Actually a system of four stars roughly 43 light-years away, appearing as one bright point."},
+  {name:"Rigel",raH:5.2423,dec:-8.202,mag:0.13,desc:"A blue supergiant marking Orion's foot — one of the most luminous stars known, about 860 light-years away."},
+  {name:"Procyon",raH:7.6550,dec:5.225,mag:0.34,desc:"A nearby star system about 11.5 light-years away, one of the closest stars visible to the naked eye."},
+  {name:"Betelgeuse",raH:5.9195,dec:7.407,mag:0.42,desc:"A huge red supergiant marking Orion's shoulder. It's nearing the end of its life and will eventually explode as a supernova."},
+  {name:"Achernar",raH:1.6286,dec:-57.237,mag:0.46,desc:"A hot blue star about 140 light-years away, flattened into an oval shape by its extremely fast spin."},
+  {name:"Altair",raH:19.8464,dec:8.868,mag:0.76,desc:"A rapidly spinning star about 17 light-years away, another point of the 'Summer Triangle' asterism."},
+  {name:"Aldebaran",raH:4.5987,dec:16.509,mag:0.86,desc:"An orange giant about 65 light-years away, marking the eye of Taurus, the bull."},
+  {name:"Antares",raH:16.4901,dec:-26.432,mag:0.96,desc:"A red supergiant marking the heart of Scorpius, hundreds of times larger than our Sun."},
+  {name:"Spica",raH:13.4199,dec:-11.161,mag:0.97,desc:"A close pair of hot, massive stars orbiting each other, about 250 light-years away."},
+  {name:"Pollux",raH:7.7553,dec:28.026,mag:1.14,desc:"An orange giant about 34 light-years away, one of the twin stars of Gemini (with Castor)."},
+  {name:"Fomalhaut",raH:22.9608,dec:-29.622,mag:1.16,desc:"A young, nearby star about 25 light-years away, known for a surrounding disk of dust and at least one planet."},
+  {name:"Deneb",raH:20.6905,dec:45.280,mag:1.25,desc:"One of the most luminous stars known, so far away (over 1,000 light-years) that its true brightness is hard to fathom."},
+  {name:"Regulus",raH:10.1395,dec:11.967,mag:1.35,desc:"A fast-spinning multi-star system about 79 light-years away, marking the heart of Leo, the lion."},
+  {name:"Castor",raH:7.5767,dec:31.888,mag:1.58,desc:"Actually six stars in one system, about 51 light-years away — the other twin of Gemini (with Pollux)."},
+  {name:"Polaris",raH:2.5303,dec:89.264,mag:1.98,desc:"The North Star — it sits almost exactly above Earth's north pole, so it barely moves in the sky and has long been used for navigation."},
 ];
 
 // A handful of easy-to-recognize constellations (J2000 RA/Dec), each as a small
 // set of member stars plus line segments connecting them by index, and an
 // "anchor" index used to place the name label.
 const CONSTELLATIONS = [
-  { name: "Orion", anchor: 0, stars: [
+  { name: "Orion", anchor: 0, desc: "The Hunter — one of the most recognizable constellations, marked by its three-star belt. Best seen in winter evenings.", stars: [
       { raH: 5.9195, dec: 7.407 },    // 0 Betelgeuse
       { raH: 5.4188, dec: 6.3497 },   // 1 Bellatrix
       { raH: 5.5334, dec: -0.2991 },  // 2 Mintaka
@@ -340,7 +389,7 @@ const CONSTELLATIONS = [
       { raH: 5.2423, dec: -8.202 },   // 5 Rigel
       { raH: 5.7959, dec: -9.6696 },  // 6 Saiph
     ], lines: [[0,1],[1,2],[2,3],[3,4],[4,0],[2,5],[4,6]] },
-  { name: "Big Dipper", anchor: 6, stars: [
+  { name: "Big Dipper", anchor: 6, desc: "A well-known asterism (star pattern) within Ursa Major, the Great Bear. Its two 'pointer' stars line up toward Polaris, the North Star.", stars: [
       { raH: 11.0622, dec: 61.7511 }, // 0 Dubhe
       { raH: 11.0307, dec: 56.3824 }, // 1 Merak
       { raH: 11.8972, dec: 53.6948 }, // 2 Phecda
@@ -349,14 +398,14 @@ const CONSTELLATIONS = [
       { raH: 13.3988, dec: 54.9254 }, // 5 Mizar
       { raH: 13.7923, dec: 49.3133 }, // 6 Alkaid
     ], lines: [[0,1],[1,2],[2,3],[3,0],[3,4],[4,5],[5,6]] },
-  { name: "Cassiopeia", anchor: 2, stars: [
+  { name: "Cassiopeia", anchor: 2, desc: "A distinctive 'W' (or 'M') shaped constellation, named for a vain queen in Greek mythology. Circles Polaris, the North Star, and is visible year-round from mid-latitudes.", stars: [
       { raH: 0.1530, dec: 59.1498 },  // 0 Caph
       { raH: 0.6751, dec: 56.5373 },  // 1 Schedar
       { raH: 0.9451, dec: 60.7167 },  // 2 Gamma Cas
       { raH: 1.4304, dec: 60.2353 },  // 3 Ruchbah
       { raH: 1.9066, dec: 63.6701 },  // 4 Segin
     ], lines: [[0,1],[1,2],[2,3],[3,4]] },
-  { name: "Scorpius", anchor: 2, stars: [
+  { name: "Scorpius", anchor: 2, desc: "The Scorpion — a summer constellation with a distinctive curved tail. Its heart is marked by the red supergiant Antares.", stars: [
       { raH: 16.0056, dec: -22.6217 }, // 0 Dschubba
       { raH: 16.0906, dec: -19.8054 }, // 1 Graffias
       { raH: 16.4901, dec: -26.432 },  // 2 Antares
@@ -364,6 +413,33 @@ const CONSTELLATIONS = [
       { raH: 17.5128, dec: -37.2958 }, // 4 Lesath
     ], lines: [[1,0],[0,2],[2,3],[3,4]] },
 ];
+
+// Major annual meteor showers (Northern Hemisphere), with typical active window
+// and peak date. Peak dates shift by at most a day or two year to year; close
+// enough for a "what's coming up" display.
+const METEOR_SHOWERS = [
+  { name: "Quadrantids", active: "Dec 26 – Jan 16", peakMonth: 1, peakDay: 4 },
+  { name: "Lyrids", active: "Apr 14 – 30", peakMonth: 4, peakDay: 22 },
+  { name: "Eta Aquariids", active: "Apr 19 – May 28", peakMonth: 5, peakDay: 6 },
+  { name: "Southern Delta Aquariids", active: "Jul 12 – Aug 23", peakMonth: 7, peakDay: 30 },
+  { name: "Perseids", active: "Jul 14 – Sep 1", peakMonth: 8, peakDay: 12 },
+  { name: "Orionids", active: "Oct 2 – Nov 7", peakMonth: 10, peakDay: 21 },
+  { name: "Leonids", active: "Nov 3 – Dec 2", peakMonth: 11, peakDay: 17 },
+  { name: "Geminids", active: "Dec 4 – 17", peakMonth: 12, peakDay: 14 },
+  { name: "Ursids", active: "Dec 17 – 26", peakMonth: 12, peakDay: 22 },
+];
+
+function nextMeteorShower(nowSec){
+  const today = new Date(nowSec * 1000);
+  let best = null, bestDelta = Infinity;
+  for (const sh of METEOR_SHOWERS){
+    let peak = new Date(today.getFullYear(), sh.peakMonth - 1, sh.peakDay);
+    if (peak < today) peak = new Date(today.getFullYear() + 1, sh.peakMonth - 1, sh.peakDay);
+    const delta = peak - today;
+    if (delta < bestDelta){ bestDelta = delta; best = { name: sh.name, active: sh.active, peakDate: peak }; }
+  }
+  return best;
+}
 
 function issAltAz(lat, lon, issLat, issLon, issHeightKm){
   const R = 6371.0;
@@ -489,8 +565,12 @@ const state = {
   lat: null, lon: null, locSource: null,
   events: null, mw: null, mwCalcAt: 0,
   iss: { valid: false, lat: 0, lon: 0, heightKm: 420, sunlit: false },
-  launch: { valid: false, error: "Loading…" },
-  detailsOpen: false,
+  launches: [],              // up to 2 upcoming launches
+  launchError: "Loading…",   // shown only when there are zero launches to show
+  detailsOpenIdx: -1,
+  solar: { gscale: null, gscaleText: null, kp: null, xrayClass: null, loaded: false },
+  outlook: { text: null, loaded: false, loading: false, open: false },
+  mapObjects: [],             // tappable {x,y,r,name,desc} rebuilt every drawSky() call
 };
 
 const el = (id) => document.getElementById(id);
@@ -562,15 +642,16 @@ function shortPad(p){
 
 async function fetchLaunch(){
   try {
-    const url = "https://ll.thespacedevs.com/2.3.0/launches/upcoming/?limit=3&location__ids=12,27&hide_recent_previous=true&mode=normal";
+    const url = "https://ll.thespacedevs.com/2.3.0/launches/upcoming/?limit=5&location__ids=12,27&hide_recent_previous=true&mode=normal";
     const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) throw new Error("HTTP " + res.status);
     const j = await res.json();
     const now = Date.now();
+    const found = [];
     for (const r of (j.results || [])){
       const t = Date.parse(r.net);
       if (!t || t < now - 600000) continue;
-      state.launch = {
+      found.push({
         valid: true,
         mission: (r.mission && r.mission.name) || (r.name || "").split(" | ").pop(),
         rocket: (r.rocket && r.rocket.configuration && r.rocket.configuration.name) || "",
@@ -581,13 +662,13 @@ async function fetchLaunch(){
         orbit: (r.mission && r.mission.orbit && r.mission.orbit.name) || "",
         precision: (r.net_precision && r.net_precision.name) || "",
         timeMs: t,
-      };
-      renderLaunch();
-      return;
+      });
+      if (found.length === 2) break;
     }
-    if (!state.launch.valid) { state.launch = { valid: false, error: "No launches scheduled" }; renderLaunch(); }
+    if (found.length){ state.launches = found; renderLaunches(); }
+    else if (!state.launches.length){ state.launchError = "No launches scheduled"; renderLaunches(); }
   } catch (e) {
-    if (!state.launch.valid) { state.launch = { valid: false, error: "Launch data unavailable right now" }; renderLaunch(); }
+    if (!state.launches.length){ state.launchError = "Launch data unavailable right now"; renderLaunches(); }
   }
 }
 
@@ -622,44 +703,122 @@ function countdownText(l){
   return "  (in " + Math.max(1, Math.round(secs/60)) + " min)";
 }
 
-function renderLaunch(){
-  const box = el("launchBox");
-  const l = state.launch;
-  if (!l.valid){
-    box.innerHTML = '<div class="placeholder">' + l.error + '</div>';
-    box.onclick = null;
-    return;
-  }
-  box.innerHTML =
-    '<div class="launchTop">' +
+function launchBoxHtml(l){
+  return '<div class="launchTop">' +
       '<div class="launchMission">' + escapeHtml(l.mission || "Unnamed mission") + '</div>' +
       '<div class="launchStatus" style="background:' + launchStatusColor(l.status) + '22; color:' + launchStatusColor(l.status) + '">' + escapeHtml(l.status || "") + '</div>' +
     '</div>' +
-    '<div class="launchWhen">' + escapeHtml(launchWhenText(l)) + '<span id="ldCountdownInline">' + escapeHtml(countdownText(l)) + '</span></div>' +
+    '<div class="launchWhen">' + escapeHtml(launchWhenText(l)) + '<span class="ldCountdownInline">' + escapeHtml(countdownText(l)) + '</span></div>' +
     '<div class="launchMeta">' + escapeHtml([l.rocket, l.pad].filter(Boolean).join("  ·  ")) + '</div>' +
     (l.desc ? '<div class="launchDesc">' + escapeHtml(l.desc) + '</div>' : '') +
     '<div class="tapHint">Tap for full details ›</div>';
-  box.onclick = openLaunchModal;
 }
 
-function openLaunchModal(){
-  const l = state.launch;
-  if (!l.valid) return;
+function renderLaunches(){
+  for (let i = 0; i < 2; i++){
+    const box = el("launchBox" + i);
+    const l = state.launches[i];
+    if (!l){
+      box.innerHTML = i === 0 ? '<div class="placeholder">' + state.launchError + '</div>' : '';
+      box.style.display = i === 0 ? "" : "none";
+      box.onclick = null;
+      continue;
+    }
+    box.style.display = "";
+    box.innerHTML = launchBoxHtml(l);
+    box.onclick = () => openLaunchModal(i);
+  }
+}
+
+function openLaunchModal(idx){
+  const l = state.launches[idx];
+  if (!l) return;
   el("ldMission").textContent = l.mission || "Unnamed mission";
   el("ldWho").textContent = [l.provider, l.rocket, l.pad].filter(Boolean).join("  ·  ");
   el("ldWhen").textContent = launchWhenText(l) + countdownText(l);
   el("ldOrbit").textContent = l.orbit ? ("Orbit: " + l.orbit) : "";
   el("ldDesc").textContent = l.desc || "No description available.";
   el("launchModal").classList.add("open");
-  state.detailsOpen = true;
+  state.detailsOpenIdx = idx;
 }
-function closeLaunchModal(){ el("launchModal").classList.remove("open"); state.detailsOpen = false; }
+function closeLaunchModal(){ el("launchModal").classList.remove("open"); state.detailsOpenIdx = -1; }
 el("launchClose").addEventListener("click", closeLaunchModal);
 el("launchModal").addEventListener("click", (e) => { if (e.target.id === "launchModal") closeLaunchModal(); });
 
 function escapeHtml(s){
   return String(s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
 }
+
+/* =====================================================================
+   LIVE DATA: solar activity (NOAA SWPC) + advisory outlook text
+   ===================================================================== */
+async function fetchSolar(){
+  const results = await Promise.allSettled([
+    fetch("https://services.swpc.noaa.gov/products/noaa-scales.json", { cache: "no-store" }).then((r) => r.json()),
+    fetch("https://services.swpc.noaa.gov/json/planetary_k_index_1m.json", { cache: "no-store" }).then((r) => r.json()),
+    fetch("https://services.swpc.noaa.gov/json/goes/primary/xray-flares-latest.json", { cache: "no-store" }).then((r) => r.json()),
+  ]);
+
+  const [scalesR, kpR, xrayR] = results;
+  if (scalesR.status === "fulfilled"){
+    // Entry "0" is today's NOAA scales (G/S/R), each with a Scale (0-5) + Text.
+    const today = scalesR.value && scalesR.value["0"];
+    const g = today && today.G;
+    if (g){ state.solar.gscale = g.Scale; state.solar.gscaleText = g.Text; }
+  }
+  if (kpR.status === "fulfilled" && Array.isArray(kpR.value) && kpR.value.length){
+    const last = kpR.value[kpR.value.length - 1];
+    state.solar.kp = last.kp_index != null ? last.kp_index : Math.round(last.estimated_kp);
+  }
+  if (xrayR.status === "fulfilled"){
+    const arr = xrayR.value;
+    const entry = Array.isArray(arr) ? arr[0] : arr;
+    if (entry && entry.current_class) state.solar.xrayClass = entry.current_class;
+  }
+  state.solar.loaded = true;
+  renderSolar();
+}
+
+function renderSolar(){
+  const s = state.solar;
+  const gEl = el("gscaleVal");
+  if (s.gscale == null) gEl.textContent = s.loaded ? "unavailable" : "loading…";
+  else gEl.textContent = (s.gscale === "0" || s.gscale === 0) ? "None" : ("G" + s.gscale + (s.gscaleText ? " (" + s.gscaleText + ")" : ""));
+
+  const kEl = el("kpVal");
+  kEl.textContent = s.kp != null ? s.kp : (s.loaded ? "unavailable" : "loading…");
+
+  const xEl = el("xrayVal");
+  xEl.textContent = s.xrayClass || (s.loaded ? "unavailable" : "loading…");
+}
+
+async function toggleOutlook(){
+  const box = el("outlookBox");
+  const toggle = el("outlookToggle");
+  if (state.outlook.open){
+    state.outlook.open = false;
+    box.style.display = "none";
+    toggle.innerHTML = "NOAA Space Weather Advisory Outlook &#9662;";
+    return;
+  }
+  state.outlook.open = true;
+  toggle.innerHTML = "NOAA Space Weather Advisory Outlook &#9652;";
+  box.style.display = "block";
+  if (state.outlook.loaded){ return; }
+  box.textContent = "Loading…";
+  try {
+    const res = await fetch("https://services.swpc.noaa.gov/text/advisory-outlook.txt", { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const text = await res.text();
+    state.outlook.text = text;
+    state.outlook.loaded = true;
+    box.textContent = text;
+  } catch (e) {
+    box.innerHTML = 'Could not load the outlook here. You can read it directly at ' +
+      '<a href="https://services.swpc.noaa.gov/text/advisory-outlook.txt" target="_blank" rel="noopener">services.swpc.noaa.gov</a>.';
+  }
+}
+el("outlookToggle").addEventListener("click", toggleOutlook);
 
 /* =====================================================================
    DRAWING: sky map + moon phase icon
@@ -716,6 +875,8 @@ function drawSky(now){
   // which otherwise makes fixed-pixel drawing look tiny relative to the map).
   const sc = mapR / 130;
   const labelFont = Math.max(11, Math.round(13 * sc));
+
+  state.mapObjects = [];   // rebuilt below; tapping the map hit-tests against this
 
   const sunH = sunAltAz(now, state.lat, state.lon);
   const moon = moonAt(now, state.lat, state.lon);
@@ -778,6 +939,7 @@ function drawSky(now){
       const starR = (s.mag < 0.5 ? 2.0 : 1.4) * sc;
       ctx.beginPath(); ctx.arc(p.x, p.y, starR, 0, Math.PI*2); ctx.fill();
       drawLabel(ctx, s.name, p.x, p.y, "rgba(150,150,175,0.85)", W, labelFont);
+      state.mapObjects.push({ x: p.x, y: p.y, r: Math.max(9 * sc, starR + 6), name: s.name, desc: s.desc });
     }
 
     // A few well-known constellation outlines (faint connecting lines + unlabeled
@@ -806,7 +968,9 @@ function drawSky(now){
         ctx.font = Math.round(labelFont * 0.85) + "px -apple-system, sans-serif";
         ctx.fillStyle = "rgba(155,165,200,0.75)";
         ctx.textAlign = "center";
-        ctx.fillText(c.name, anchor.x, anchor.y - 11 * sc);
+        const labelY = anchor.y - 11 * sc;
+        ctx.fillText(c.name, anchor.x, labelY);
+        state.mapObjects.push({ x: anchor.x, y: labelY, r: 16 * sc, name: c.name, desc: c.desc });
       }
     }
   }
@@ -821,6 +985,7 @@ function drawSky(now){
     ctx.fillStyle = PLANETS[i].color;
     ctx.beginPath(); ctx.arc(p.x, p.y, 4.5 * sc, 0, Math.PI*2); ctx.fill();
     drawLabel(ctx, PLANETS[i].name, p.x, p.y, PLANETS[i].color, W, labelFont);
+    state.mapObjects.push({ x: p.x, y: p.y, r: 14 * sc, name: PLANETS[i].name, desc: PLANETS[i].desc });
   }
 
   // ISS
@@ -835,6 +1000,7 @@ function drawSky(now){
         const issSize = 8 * sc;
         ctx.fillRect(p.x - issSize/2, p.y - issSize/2, issSize, issSize);
         drawLabel(ctx, "ISS", p.x, p.y, c, W, labelFont);
+        state.mapObjects.push({ x: p.x, y: p.y, r: 14 * sc, name: "ISS", desc: ISS_DESC });
       }
     }
   }
@@ -847,6 +1013,7 @@ function drawSky(now){
       const s0 = sunAt(dayNumber(now));
       drawMoonDisc(ctx, p.x, p.y, 11 * sc, rev(moon.lon - s0.lon), "#ebebe1", "#37373f");
       drawLabel(ctx, "Moon", p.x + 11*sc, p.y, "#ebebe1", W, labelFont);
+      state.mapObjects.push({ x: p.x, y: p.y, r: 16 * sc, name: "Moon", desc: MOON_DESC });
     }
   }
 
@@ -858,6 +1025,7 @@ function drawSky(now){
       ctx.fillStyle = "#ffd23f";
       ctx.beginPath(); ctx.arc(p.x, p.y, 9.5 * sc, 0, Math.PI*2); ctx.fill();
       drawLabel(ctx, "Sun", p.x + 9.5*sc, p.y, "#ffd23f", W, labelFont);
+      state.mapObjects.push({ x: p.x, y: p.y, r: 16 * sc, name: "Sun", desc: SUN_DESC });
     }
   }
 
@@ -867,6 +1035,33 @@ function drawSky(now){
   ctx.fillStyle = "rgba(120,120,145,0.85)";
   ctx.fillText("center = overhead", W - 10, H - 12);
 }
+
+// Tap/click any object drawn on the map (Sun, Moon, planet, star, constellation)
+// to see a short description. state.mapObjects is rebuilt fresh every drawSky() call.
+function findTappedObject(clientX, clientY){
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
+  const x = (clientX - rect.left) * scaleX, y = (clientY - rect.top) * scaleY;
+  let best = null, bestD = Infinity;
+  for (const o of state.mapObjects){
+    const d = Math.hypot(o.x - x, o.y - y);
+    if (d <= o.r && d < bestD){ bestD = d; best = o; }
+  }
+  return best;
+}
+
+function openObjModal(o){
+  el("objName").textContent = o.name;
+  el("objDesc").textContent = o.desc || "No description available.";
+  el("objModal").classList.add("open");
+}
+function closeObjModal(){ el("objModal").classList.remove("open"); }
+el("objClose").addEventListener("click", closeObjModal);
+el("objModal").addEventListener("click", (e) => { if (e.target.id === "objModal") closeObjModal(); });
+canvas.addEventListener("click", (e) => {
+  const hit = findTappedObject(e.clientX, e.clientY);
+  if (hit) openObjModal(hit);
+});
 
 function renderPanel(now){
   if (!state.events) return;
@@ -891,6 +1086,14 @@ function renderPanel(now){
   el("phasePct").textContent = pct + "% lit";
   phaseCtx.clearRect(0,0,64,64);
   drawMoonDisc(phaseCtx, 32, 32, 28, A, "#ebebe1", "#37373f");
+
+  const ms = nextMeteorShower(now);
+  if (ms){
+    const days = Math.round((ms.peakDate.getTime() - now*1000) / 86400000);
+    const when = days <= 0 ? "peaking now" : days === 1 ? "peaks tomorrow" : "peaks in " + days + " days";
+    el("meteorShower").innerHTML = "Next meteor shower: <span class=\"name\">" + escapeHtml(ms.name) + "</span>" +
+      " &mdash; active " + escapeHtml(ms.active) + " (" + when + ")";
+  }
 }
 
 /* =====================================================================
@@ -906,14 +1109,26 @@ window.addEventListener("resize", fitCanvas);
 
 let lastDaySeen = null;
 
+// e.g. "UTC-4" or "UTC+5:30". Reflects the browser's current offset, so it
+// updates on its own whenever Daylight Saving starts or ends.
+function utcOffsetLabel(d){
+  const totalMin = -d.getTimezoneOffset();
+  const sign = totalMin >= 0 ? "+" : "-";
+  const abs = Math.abs(totalMin);
+  const h = Math.floor(abs / 60), m = abs % 60;
+  return "UTC" + sign + h + (m ? ":" + String(m).padStart(2, "0") : "");
+}
+
 function tick(){
   const now = Math.floor(Date.now() / 1000);
+  const d = new Date(now * 1000);
 
-  el("clock").textContent = new Date(now*1000).toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit", second:"2-digit" });
-  el("dateLabel").textContent = new Date(now*1000).toLocaleDateString(undefined, { weekday:"short", month:"short", day:"numeric" });
+  el("clock").textContent = d.toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit", second:"2-digit" }) +
+    " (" + utcOffsetLabel(d) + ")";
+  el("dateLabel").textContent = d.toLocaleDateString(undefined, { weekday:"short", month:"short", day:"numeric" });
 
   if (state.lat != null){
-    const today = new Date(now*1000).getDate();
+    const today = d.getDate();
     if (!state.events || lastDaySeen !== today){
       state.events = computeDailyEvents(now, state.lat, state.lon);
       lastDaySeen = today;
@@ -924,12 +1139,14 @@ function tick(){
     renderPanel(now);
   }
 
-  if (state.launch.valid && !state.detailsOpen){
-    const inline = el("ldCountdownInline");
-    if (inline) inline.textContent = countdownText(state.launch);
-  }
-  if (state.detailsOpen && state.launch.valid){
-    el("ldWhen").textContent = launchWhenText(state.launch) + countdownText(state.launch);
+  if (state.detailsOpenIdx === -1){
+    document.querySelectorAll(".ldCountdownInline").forEach((inlineEl, i) => {
+      const l = state.launches[i];
+      if (l) inlineEl.textContent = countdownText(l);
+    });
+  } else {
+    const l = state.launches[state.detailsOpenIdx];
+    if (l) el("ldWhen").textContent = launchWhenText(l) + countdownText(l);
   }
 }
 
@@ -944,8 +1161,10 @@ function boot(){
 
   fetchISS();
   fetchLaunch();
+  fetchSolar();
   setInterval(fetchISS, 15000);
   setInterval(fetchLaunch, 60 * 60 * 1000);
+  setInterval(fetchSolar, 10 * 60 * 1000);
 
   setInterval(tick, 1000);
   tick();
