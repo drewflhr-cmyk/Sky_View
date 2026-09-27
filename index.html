@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sky View</title>
+<meta name="description" content="Live sky map, sun/moon/rise-set times, and next Space Coast rocket launch, calculated for wherever you are.">
+<style>
+  :root{
+    --bg:#05070d; --panel:#0a0e18; --line:#232a3d; --text:#e8ecf7; --dim:#8b93ab;
+    --dimmer:#565f78; --accent:#ffb454; --sun:#ffd23f; --moon:#e8e6dc; --good:#3ddc84;
+    --warn:#ffb454; --bad:#5a6178;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-tap-highlight-color:transparent; overscroll-behavior:none;}
+  #app{min-height:100vh; display:flex; flex-direction:column;}
+  header{display:flex; align-items:center; justify-content:space-between; gap:8px;
+    padding:10px 14px; border-bottom:1px solid var(--line); flex-wrap:wrap;}
+  header .time{font-size:1.15rem; font-weight:600; letter-spacing:0.02em;}
+  header .date{color:var(--dim); font-size:0.85rem; margin-left:8px;}
+  header .locBtn{background:none; border:1px solid var(--line); color:var(--dim);
+    font-size:0.78rem; padding:6px 10px; border-radius:20px; cursor:pointer;}
+  header .locBtn:active{background:var(--panel);}
+  .layout{display:flex; flex:1; flex-wrap:wrap;}
+  .mapPanel{position:relative; flex:1 1 320px; min-width:280px; display:flex;
+    align-items:center; justify-content:center; padding:10px;}
+  .mapPanel canvas{width:100%; max-width:420px; aspect-ratio:1/1; display:block;}
+  .stateBadge{position:absolute; top:16px; right:16px; font-size:0.75rem; padding:3px 9px;
+    border-radius:10px; background:rgba(255,255,255,0.06); color:var(--dim);}
+  .infoPanel{flex:1 1 300px; min-width:280px; padding:14px 16px 28px; border-left:1px solid var(--line);}
+  @media (max-width:700px){ .infoPanel{border-left:none; border-top:1px solid var(--line);} }
+  .row{display:flex; justify-content:space-between; align-items:baseline; padding:6px 0; font-size:0.95rem;}
+  .row .label{color:var(--dim);}
+  .row .val{font-weight:600;}
+  .divider{height:1px; background:var(--line); margin:10px 0;}
+  .phaseBlock{display:flex; align-items:center; gap:12px; padding:8px 0;}
+  .phaseBlock canvas{flex:none;}
+  .phaseText .name{font-weight:600;}
+  .phaseText .pct{color:var(--dim); font-size:0.85rem;}
+  .sectionTitle{color:var(--accent); font-size:0.8rem; letter-spacing:0.06em;
+    text-transform:uppercase; font-weight:700; margin:14px 0 8px;}
+  .launchBox{border:1px solid var(--line); border-radius:12px; padding:12px 14px; cursor:pointer;
+    background:rgba(255,255,255,0.02);}
+  .launchBox:active{background:rgba(255,255,255,0.05);}
+  .launchTop{display:flex; justify-content:space-between; align-items:flex-start; gap:8px;}
+  .launchMission{font-weight:600; font-size:1.02rem; line-height:1.3;}
+  .launchStatus{font-size:0.72rem; font-weight:700; padding:2px 8px; border-radius:8px; white-space:nowrap;}
+  .launchWhen{color:#7fc7ff; font-size:0.9rem; margin-top:6px;}
+  .launchMeta{color:var(--dim); font-size:0.82rem; margin-top:2px;}
+  .launchDesc{color:#b7bccb; font-size:0.85rem; margin-top:8px; line-height:1.4;
+    display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;}
+  .tapHint{color:var(--accent); font-size:0.78rem; margin-top:6px;}
+  .placeholder{color:var(--dimmer); font-size:0.88rem; padding:6px 0;}
+  .modal{position:fixed; inset:0; background:rgba(0,0,0,0.6); display:none;
+    align-items:center; justify-content:center; padding:16px; z-index:20;}
+  .modal.open{display:flex;}
+  .modalCard{background:var(--panel); border:1px solid var(--line); border-radius:16px;
+    max-width:480px; width:100%; max-height:88vh; overflow:auto; padding:20px;}
+  .modalCard h2{margin:0 0 4px; font-size:1.2rem;}
+  .modalCard .closeRow{display:flex; justify-content:flex-end;}
+  .modalCard .closeRow button{background:none; border:none; color:var(--dim); font-size:0.85rem;
+    padding:6px; cursor:pointer;}
+  .field{margin:10px 0;}
+  .field label{display:block; font-size:0.8rem; color:var(--dim); margin-bottom:4px;}
+  .field input{width:100%; padding:8px 10px; border-radius:8px; border:1px solid var(--line);
+    background:#0d1220; color:var(--text); font-size:0.95rem;}
+  .btnRow{display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;}
+  .btn{flex:1; padding:10px; border-radius:10px; border:1px solid var(--line); background:#141a2c;
+    color:var(--text); font-size:0.9rem; cursor:pointer;}
+  .btn.primary{background:var(--accent); color:#1a1200; border-color:var(--accent); font-weight:700;}
+  footer{text-align:center; color:var(--dimmer); font-size:0.72rem; padding:10px 14px 18px;}
+  a{color:#7fc7ff;}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div>
+      <span class="time" id="clock">--:--</span>
+      <span class="date" id="dateLabel"></span>
+    </div>
+    <button class="locBtn" id="locBtn">Location: locating…</button>
+  </header>
+
+  <div class="layout">
+    <div class="mapPanel">
+      <canvas id="skyCanvas" width="600" height="600"></canvas>
+      <div class="stateBadge" id="stateBadge">--</div>
+    </div>
+
+    <div class="infoPanel">
+      <div class="row"><span class="label">Sunrise</span><span class="val" id="sunRise" style="color:var(--sun)">--</span></div>
+      <div class="row"><span class="label">Sunset</span><span class="val" id="sunSet" style="color:var(--sun)">--</span></div>
+      <div class="row"><span class="label">Moonrise</span><span class="val" id="moonRise" style="color:var(--moon)">--</span></div>
+      <div class="row"><span class="label">Moonset</span><span class="val" id="moonSet" style="color:var(--moon)">--</span></div>
+      <div class="row"><span class="label">Full Moon</span><span class="val" id="fullMoon" style="color:var(--moon)">--</span></div>
+
+      <div class="phaseBlock">
+        <canvas id="phaseCanvas" width="64" height="64" style="width:40px;height:40px;"></canvas>
+        <div class="phaseText">
+          <div class="name" id="phaseName">--</div>
+          <div class="pct" id="phasePct">--</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="sectionTitle">Next Launch</div>
+      <div class="launchBox" id="launchBox">
+        <div class="placeholder" id="launchPlaceholder">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Sun/Moon/planet/ISS positions calculated on this page. ISS position and launch schedule need an internet connection to update.
+  </footer>
+</div>
+
+<!-- Location override modal -->
+<div class="modal" id="locModal">
+  <div class="modalCard">
+    <div class="closeRow"><button id="locClose">Close</button></div>
+    <h2>Set your location</h2>
+    <p class="placeholder" style="margin-top:0">Use your device's GPS, or type coordinates for anywhere &mdash; a beach, a campsite, anywhere.</p>
+    <div class="btnRow">
+      <button class="btn primary" id="useGpsBtn">Use my GPS location</button>
+    </div>
+    <div class="field">
+      <label>Latitude</label>
+      <input type="number" step="any" id="latInput" placeholder="e.g. 27.2488">
+    </div>
+    <div class="field">
+      <label>Longitude</label>
+      <input type="number" step="any" id="lonInput" placeholder="e.g. -80.2590">
+    </div>
+    <div class="btnRow">
+      <button class="btn primary" id="setManualBtn">Use these coordinates</button>
+    </div>
+  </div>
+</div>
+
+<!-- Launch details modal -->
+<div class="modal" id="launchModal">
+  <div class="modalCard">
+    <div class="closeRow"><button id="launchClose">Close</button></div>
+    <h2 id="ldMission">--</h2>
+    <div class="launchMeta" id="ldWho">--</div>
+    <div class="launchWhen" id="ldWhen">--</div>
+    <div class="launchMeta" id="ldOrbit"></div>
+    <div class="divider"></div>
+    <div class="launchDesc" id="ldDesc" style="-webkit-line-clamp:unset; display:block;">--</div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* =====================================================================
+   ASTRONOMY MATH  (ported from the ESP32 "Sky View" sketch, which uses
+   Paul Schlyter's low-precision formulas — accurate to a few arc-minutes)
+   ===================================================================== */
+const RAD = Math.PI / 180, DEG = 180 / Math.PI;
+function rev(x){ x = x % 360; return x < 0 ? x + 360 : x; }
+function sind(x){ return Math.sin(x * RAD); }
+function cosd(x){ return Math.cos(x * RAD); }
+function asind(x){ return Math.asin(x) * DEG; }
+function atan2d(y, x){ return Math.atan2(y, x) * DEG; }
+
+function dayNumber(t){ return (t - 946598400) / 86400; } // t = Unix seconds
+
+function localSiderealTime(t, lon){
+  const jd = t / 86400 + 2440587.5;
+  return rev(280.46061837 + 360.98564736629 * (jd - 2451545.0) + lon);
+}
+
+function solveKepler(M, e){
+  let E = M + e * DEG * sind(M) * (1 + e * cosd(M));
+  for (let k = 0; k < 10; k++){
+    const dE = (E - e * DEG * sind(E) - M) / (1 - e * cosd(E));
+    E -= dE;
+    if (Math.abs(dE) < 1e-6) break;
+  }
+  return E;
+}
+
+function orbitLonLatR(N, i, w, a, e, M){
+  const E = solveKepler(M, e);
+  const xv = a * (cosd(E) - e);
+  const yv = a * Math.sqrt(1 - e * e) * sind(E);
+  const v = atan2d(yv, xv);
+  const r = Math.sqrt(xv * xv + yv * yv);
+  const xh = r * (cosd(N) * cosd(v + w) - sind(N) * sind(v + w) * cosd(i));
+  const yh = r * (sind(N) * cosd(v + w) + cosd(N) * sind(v + w) * cosd(i));
+  const zh = r * (sind(v + w) * sind(i));
+  return { lon: rev(atan2d(yh, xh)), lat: atan2d(zh, Math.sqrt(xh * xh + yh * yh)), r };
+}
+
+function eclipticToEquatorial(lon, lat, ecl){
+  const xg = cosd(lon) * cosd(lat), yg = sind(lon) * cosd(lat), zg = sind(lat);
+  const ye = yg * cosd(ecl) - zg * sind(ecl);
+  const ze = yg * sind(ecl) + zg * cosd(ecl);
+  return { ra: rev(atan2d(ye, xg)), dec: atan2d(ze, Math.sqrt(xg * xg + ye * ye)) };
+}
+
+function equatorialToHorizon(ra, dec, lst, lat){
+  const ha = rev(lst - ra);
+  const x = cosd(ha) * cosd(dec), y = sind(ha) * cosd(dec), z = sind(dec);
+  const xhor = x * sind(lat) - z * cosd(lat);
+  const zhor = x * cosd(lat) + z * sind(lat);
+  return { az: rev(atan2d(y, xhor) + 180.0), alt: asind(zhor) };
+}
+
+function sunAt(d){
+  const ws = rev(282.9404 + 4.70935e-5 * d);
+  const e = 0.016709 - 1.151e-9 * d;
+  const Ms = rev(356.0470 + 0.9856002585 * d);
+  const ecl = 23.4393 - 3.563e-7 * d;
+  const E = solveKepler(Ms, e);
+  const xv = cosd(E) - e, yv = Math.sqrt(1 - e * e) * sind(E);
+  const v = atan2d(yv, xv);
+  const r = Math.sqrt(xv * xv + yv * yv);
+  const lon = rev(v + ws);
+  return { lon, xs: r * cosd(lon), ys: r * sind(lon), Ms, ws, ecl, r };
+}
+
+function sunAltAz(t, lat, lon){
+  const s = sunAt(dayNumber(t));
+  const { ra, dec } = eclipticToEquatorial(s.lon, 0, s.ecl);
+  return equatorialToHorizon(ra, dec, localSiderealTime(t, lon), lat);
+}
+
+function moonAt(t, lat, lon){
+  const d = dayNumber(t);
+  const s = sunAt(d);
+  const N = rev(125.1228 - 0.0529538083 * d);
+  const i = 5.1454;
+  const w = rev(318.0634 + 0.1643573223 * d);
+  const a = 60.2666, e = 0.054900;
+  const Mm = rev(115.3654 + 13.0649929509 * d);
+  let { lon: mlon, lat: mlat, r: mr } = orbitLonLatR(N, i, w, a, e, Mm);
+
+  const Ms = s.Ms;
+  const Ls = rev(s.Ms + s.ws);
+  const Lm = rev(Mm + w + N);
+  const D = rev(Lm - Ls);
+  const F = rev(Lm - N);
+
+  mlon += -1.274 * sind(Mm - 2*D) + 0.658 * sind(2*D) - 0.186 * sind(Ms)
+        - 0.059 * sind(2*Mm - 2*D) - 0.057 * sind(Mm - 2*D + Ms)
+        + 0.053 * sind(Mm + 2*D) + 0.046 * sind(2*D - Ms) + 0.041 * sind(Mm - Ms)
+        - 0.035 * sind(D) - 0.031 * sind(Mm + Ms) - 0.015 * sind(2*F - 2*D)
+        + 0.011 * sind(Mm - 4*D);
+  mlat += -0.173 * sind(F - 2*D) - 0.055 * sind(Mm - F - 2*D) - 0.046 * sind(Mm + F - 2*D)
+        + 0.033 * sind(F + 2*D) + 0.017 * sind(2*Mm + F);
+  mr += -0.58 * cosd(Mm - 2*D) - 0.46 * cosd(2*D);
+  mlon = rev(mlon);
+
+  const { ra, dec } = eclipticToEquatorial(mlon, mlat, s.ecl);
+  const h = equatorialToHorizon(ra, dec, localSiderealTime(t, lon), lat);
+  h.alt -= asind(1.0 / mr) * cosd(h.alt);
+  h.lon = mlon; h.lat = mlat; h.r = mr;
+  return h;
+}
+
+function moonPhaseAngle(t, lat, lon){
+  return rev(moonAt(t, lat, lon).lon - sunAt(dayNumber(t)).lon);
+}
+
+function phaseName(A){
+  if (A < 11.25 || A >= 348.75) return "New Moon";
+  if (A < 78.75)  return "Waxing Crescent";
+  if (A < 101.25) return "First Quarter";
+  if (A < 168.75) return "Waxing Gibbous";
+  if (A < 191.25) return "Full Moon";
+  if (A < 258.75) return "Waning Gibbous";
+  if (A < 281.25) return "Last Quarter";
+  return "Waning Crescent";
+}
+
+const PLANETS = [
+  { name:"Mercury", N0:48.3313, N1:3.24587e-5, i0:7.0047, i1:5.00e-8, w0:29.1241, w1:1.01444e-5, a:0.387098, e0:0.205635, e1:5.59e-10, M0:168.6562, M1:4.0923344368, color:"rgb(190,190,190)" },
+  { name:"Venus",   N0:76.6799, N1:2.46590e-5, i0:3.3946, i1:2.75e-8, w0:54.8910, w1:1.38374e-5, a:0.723330, e0:0.006773, e1:-1.302e-9, M0:48.0052, M1:1.6021302244, color:"rgb(255,255,215)" },
+  { name:"Mars",    N0:49.5574, N1:2.11081e-5, i0:1.8497, i1:-1.78e-8, w0:286.5016, w1:2.92961e-5, a:1.523688, e0:0.093405, e1:2.516e-9, M0:18.6021, M1:0.5240207766, color:"rgb(255,100,60)" },
+  { name:"Jupiter", N0:100.4542, N1:2.76854e-5, i0:1.3030, i1:-1.557e-7, w0:273.8777, w1:1.64505e-5, a:5.20256, e0:0.048498, e1:4.469e-9, M0:19.8950, M1:0.0830853001, color:"rgb(245,210,160)" },
+  { name:"Saturn",  N0:113.6634, N1:2.38980e-5, i0:2.4886, i1:-1.081e-7, w0:339.3939, w1:2.97661e-5, a:9.55475, e0:0.055546, e1:-9.499e-9, M0:316.9670, M1:0.0334442282, color:"rgb(235,205,100)" },
+];
+
+function planetAltAz(idx, t, lat, lon){
+  const d = dayNumber(t);
+  const s = sunAt(d);
+  const p = PLANETS[idx];
+  let { lon: plon, lat: plat, r: pr } = orbitLonLatR(
+    rev(p.N0 + p.N1*d), p.i0 + p.i1*d, rev(p.w0 + p.w1*d), p.a, p.e0 + p.e1*d, rev(p.M0 + p.M1*d));
+
+  const Mj = rev(19.8950 + 0.0830853001*d);
+  const Mn = rev(316.9670 + 0.0334442282*d);
+  if (idx === 3){
+    plon += -0.332*sind(2*Mj-5*Mn-67.6) - 0.056*sind(2*Mj-2*Mn+21) + 0.042*sind(3*Mj-5*Mn+21)
+          - 0.036*sind(Mj-2*Mn) + 0.022*cosd(Mj-Mn) + 0.023*sind(2*Mj-3*Mn+52) - 0.016*sind(Mj-5*Mn-69);
+  } else if (idx === 4){
+    plon += 0.812*sind(2*Mj-5*Mn-67.6) - 0.229*cosd(2*Mj-4*Mn-2) + 0.119*sind(Mj-2*Mn-3)
+          + 0.046*sind(2*Mj-6*Mn-69) + 0.014*sind(Mj-3*Mn+32);
+    plat += -0.020*cosd(2*Mj-4*Mn-2) + 0.018*sind(2*Mj-6*Mn-49);
+  }
+
+  const xg = pr*cosd(plon)*cosd(plat) + s.xs;
+  const yg = pr*sind(plon)*cosd(plat) + s.ys;
+  const zg = pr*sind(plat);
+  const glon = rev(atan2d(yg, xg));
+  const glat = atan2d(zg, Math.sqrt(xg*xg + yg*yg));
+  const { ra, dec } = eclipticToEquatorial(glon, glat, s.ecl);
+  return equatorialToHorizon(ra, dec, localSiderealTime(t, lon), lat);
+}
+
+const STARS = [
+  {name:"Sirius",raH:6.7525,dec:-16.716,mag:-1.46},{name:"Canopus",raH:6.3992,dec:-52.696,mag:-0.74},
+  {name:"Arcturus",raH:14.2610,dec:19.182,mag:-0.05},{name:"Vega",raH:18.6156,dec:38.784,mag:0.03},
+  {name:"Capella",raH:5.2782,dec:45.998,mag:0.08},{name:"Rigel",raH:5.2423,dec:-8.202,mag:0.13},
+  {name:"Procyon",raH:7.6550,dec:5.225,mag:0.34},{name:"Betelgeuse",raH:5.9195,dec:7.407,mag:0.42},
+  {name:"Achernar",raH:1.6286,dec:-57.237,mag:0.46},{name:"Altair",raH:19.8464,dec:8.868,mag:0.76},
+  {name:"Aldebaran",raH:4.5987,dec:16.509,mag:0.86},{name:"Antares",raH:16.4901,dec:-26.432,mag:0.96},
+  {name:"Spica",raH:13.4199,dec:-11.161,mag:0.97},{name:"Pollux",raH:7.7553,dec:28.026,mag:1.14},
+  {name:"Fomalhaut",raH:22.9608,dec:-29.622,mag:1.16},{name:"Deneb",raH:20.6905,dec:45.280,mag:1.25},
+  {name:"Regulus",raH:10.1395,dec:11.967,mag:1.35},{name:"Castor",raH:7.5767,dec:31.888,mag:1.58},
+  {name:"Polaris",raH:2.5303,dec:89.264,mag:1.98},
+];
+
+function issAltAz(lat, lon, issLat, issLon, issHeightKm){
+  const R = 6371.0;
+  const p = lat*RAD, l = lon*RAD, ps = issLat*RAD, ls = issLon*RAD;
+  const ox = R*Math.cos(p)*Math.cos(l), oy = R*Math.cos(p)*Math.sin(l), oz = R*Math.sin(p);
+  const sx = (R+issHeightKm)*Math.cos(ps)*Math.cos(ls);
+  const sy = (R+issHeightKm)*Math.cos(ps)*Math.sin(ls);
+  const sz = (R+issHeightKm)*Math.sin(ps);
+  const dx = sx-ox, dy = sy-oy, dz = sz-oz;
+  const e = -Math.sin(l)*dx + Math.cos(l)*dy;
+  const n = -Math.sin(p)*Math.cos(l)*dx - Math.sin(p)*Math.sin(l)*dy + Math.cos(p)*dz;
+  const u =  Math.cos(p)*Math.cos(l)*dx + Math.cos(p)*Math.sin(l)*dy + Math.sin(p)*dz;
+  return { alt: Math.atan2(u, Math.sqrt(e*e+n*n))*DEG, az: rev(Math.atan2(e,n)*DEG) };
+}
+
+function findRiseSet(altFn, start, end){
+  const h0 = -0.833, step = 600;
+  let rise = 0, set = 0;
+  let prev = altFn(start) - h0;
+  for (let t = start + step; t <= end + step && (rise === 0 || set === 0); t += step){
+    const tt = t > end ? end : t;
+    const cur = altFn(tt) - h0;
+    const up = prev < 0 && cur >= 0, down = prev >= 0 && cur < 0;
+    if ((up && rise === 0) || (down && set === 0)){
+      let lo = tt - step, hi = tt;
+      for (let k = 0; k < 10; k++){
+        const mid = lo + Math.floor((hi - lo) / 2);
+        const v = altFn(mid) - h0;
+        if ((v >= 0) === up) hi = mid; else lo = mid;
+      }
+      if (up) rise = hi; else set = hi;
+    }
+    prev = cur;
+    if (tt === end) break;
+  }
+  return { rise, set };
+}
+
+function pastFull(t, lat, lon){
+  const v = rev(moonPhaseAngle(t, lat, lon) - 180.0);
+  return v > 180 ? v - 360 : v;
+}
+
+function findNextFullMoon(from, lat, lon){
+  const step = 6 * 3600;
+  let prev = pastFull(from, lat, lon);
+  for (let t = from + step; t <= from + 32*86400; t += step){
+    const cur = pastFull(t, lat, lon);
+    if (prev < 0 && cur >= 0){
+      let lo = t - step, hi = t;
+      for (let k = 0; k < 16; k++){
+        const mid = lo + Math.floor((hi - lo) / 2);
+        if (pastFull(mid, lat, lon) >= 0) hi = mid; else lo = mid;
+      }
+      return hi;
+    }
+    prev = cur;
+  }
+  return 0;
+}
+
+function localMidnight(unixSec, addDays){
+  const d = new Date(unixSec * 1000);
+  return Math.floor(new Date(d.getFullYear(), d.getMonth(), d.getDate() + addDays, 0, 0, 0).getTime() / 1000);
+}
+
+function computeDailyEvents(now, lat, lon){
+  const start = localMidnight(now, 0), end = localMidnight(now, 1);
+  const sun = findRiseSet((t) => sunAltAz(t, lat, lon).alt, start, end);
+  const moon = findRiseSet((t) => moonAt(t, lat, lon).alt, start, end);
+  const nextFullMoon = findNextFullMoon(start, lat, lon);
+  return { sunRise: sun.rise, sunSet: sun.set, moonRise: moon.rise, moonSet: moon.set, nextFullMoon, day: new Date(now*1000).getDate() };
+}
+
+function mwIntensity(l, b){
+  const lc = l > 180 ? l - 360 : l;
+  const amp = 0.35 + 0.65*Math.exp(-(lc/55)*(lc/55)) + 0.30*Math.exp(-((lc-78)/18)*((lc-78)/18));
+  const sigma = 4.5 + 4.5*Math.exp(-(lc/35)*(lc/35));
+  let I = amp * Math.exp(-(b/sigma)*(b/sigma));
+  if (lc > 5 && lc < 75) I -= 0.45*amp*Math.exp(-((b-1.5)/1.8)*((b-1.5)/1.8));
+  return Math.max(0, Math.min(1, I));
+}
+
+function computeMilkyWay(now, lat, lon){
+  const aG = 192.85948*RAD, dG = 27.12825*RAD, lN = 122.93192;
+  const sdG = Math.sin(dG), cdG = Math.cos(dG);
+  const sl = Math.sin(lat*RAD), cl = Math.cos(lat*RAD);
+  const lst = localSiderealTime(now, lon) * RAD;
+  const pts = [];
+  for (let l = 0; l < 360; l += 2.0){
+    for (let b = -12; b <= 12.01; b += 1.5){
+      const I = mwIntensity(l, b);
+      if (I < 0.08) continue;
+      const sb = Math.sin(b*RAD), cb = Math.cos(b*RAD), dl = (lN - l)*RAD;
+      const sd = sdG*sb + cdG*cb*Math.cos(dl);
+      const dec = Math.asin(sd);
+      const ra = aG + Math.atan2(cb*Math.sin(dl), cdG*sb - sdG*cb*Math.cos(dl));
+      const ha = lst - ra;
+      const x = Math.cos(ha)*Math.cos(dec), y = Math.sin(ha)*Math.cos(dec), z = sd;
+      const xhor = x*sl - z*cl, zhor = x*cl + z*sl;
+      if (zhor <= 0) continue;
+      const alt = Math.asin(zhor)*DEG;
+      const az = rev(Math.atan2(y, xhor)*DEG + 180.0);
+      pts.push({ alt, az, level: I });
+    }
+  }
+  return pts;
+}
+
+// alt/az -> {x,y} in a unit disc, radius 1, centered at 0,0. East at top, North at left.
+function plotUnit(alt, az){
+  if (alt < -0.5) return null;
+  if (alt < 0) alt = 0;
+  const r = (90.0 - alt) / 90.0;
+  const th = (az - 90.0) * RAD;
+  return { x: r * Math.sin(th), y: -r * Math.cos(th) };
+}
+
+/* =====================================================================
+   APP STATE + LOCATION
+   ===================================================================== */
+const state = {
+  lat: null, lon: null, locSource: null,
+  events: null, mw: null, mwCalcAt: 0,
+  iss: { valid: false, lat: 0, lon: 0, heightKm: 420, sunlit: false },
+  launch: { valid: false, error: "Loading…" },
+  detailsOpen: false,
+};
+
+const el = (id) => document.getElementById(id);
+
+function saveLocation(lat, lon, source){
+  state.lat = lat; state.lon = lon; state.locSource = source;
+  try { localStorage.setItem("skyview_loc", JSON.stringify({lat, lon, source})); } catch(e){}
+  el("locBtn").textContent = "Location: " + lat.toFixed(2) + ", " + lon.toFixed(2) + (source === "gps" ? " (GPS)" : "");
+  state.events = null;   // force recompute for the new location
+  state.mw = null;
+  fetchLaunch();          // launch list doesn't depend on location, but re-check on first load
+}
+
+function loadSavedLocation(){
+  try {
+    const raw = localStorage.getItem("skyview_loc");
+    if (raw) return JSON.parse(raw);
+  } catch(e){}
+  return null;
+}
+
+function requestGps(onFail){
+  if (!navigator.geolocation){ onFail && onFail(); return; }
+  el("locBtn").textContent = "Location: locating…";
+  navigator.geolocation.getCurrentPosition(
+    (pos) => saveLocation(pos.coords.latitude, pos.coords.longitude, "gps"),
+    () => { onFail ? onFail() : openLocationModal(); },
+    { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
+  );
+}
+
+function openLocationModal(){
+  if (state.lat != null){ el("latInput").value = state.lat; el("lonInput").value = state.lon; }
+  el("locModal").classList.add("open");
+}
+function closeLocationModal(){ el("locModal").classList.remove("open"); }
+
+el("locBtn").addEventListener("click", openLocationModal);
+el("locClose").addEventListener("click", closeLocationModal);
+el("useGpsBtn").addEventListener("click", () => { requestGps(() => alert("Couldn't get GPS location. You can enter coordinates below instead.")); closeLocationModal(); });
+el("setManualBtn").addEventListener("click", () => {
+  const lat = parseFloat(el("latInput").value), lon = parseFloat(el("lonInput").value);
+  if (!isFinite(lat) || !isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180){
+    alert("Enter a valid latitude (-90 to 90) and longitude (-180 to 180)."); return;
+  }
+  saveLocation(lat, lon, "manual");
+  closeLocationModal();
+});
+
+/* =====================================================================
+   LIVE DATA: ISS + next launch
+   ===================================================================== */
+async function fetchISS(){
+  try {
+    const res = await fetch("https://api.wheretheiss.at/v1/satellites/25544", { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const j = await res.json();
+    state.iss.lat = j.latitude; state.iss.lon = j.longitude; state.iss.heightKm = j.altitude || 420;
+    state.iss.sunlit = j.visibility === "daylight";
+    state.iss.valid = true;
+  } catch (e) {
+    // Leave the last known position in place; just don't update.
+  }
+}
+
+function shortPad(p){
+  return (p || "").replace("Space Launch Complex ", "SLC-").replace("Launch Complex ", "LC-");
+}
+
+async function fetchLaunch(){
+  try {
+    const url = "https://ll.thespacedevs.com/2.3.0/launches/upcoming/?limit=3&location__ids=12,27&hide_recent_previous=true&mode=normal";
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const j = await res.json();
+    const now = Date.now();
+    for (const r of (j.results || [])){
+      const t = Date.parse(r.net);
+      if (!t || t < now - 600000) continue;
+      state.launch = {
+        valid: true,
+        mission: (r.mission && r.mission.name) || (r.name || "").split(" | ").pop(),
+        rocket: (r.rocket && r.rocket.configuration && r.rocket.configuration.name) || "",
+        pad: shortPad(r.pad && r.pad.name),
+        status: (r.status && r.status.abbrev) || "",
+        desc: (r.mission && r.mission.description) || "",
+        provider: (r.launch_service_provider && r.launch_service_provider.name) || "",
+        orbit: (r.mission && r.mission.orbit && r.mission.orbit.name) || "",
+        precision: (r.net_precision && r.net_precision.name) || "",
+        timeMs: t,
+      };
+      renderLaunch();
+      return;
+    }
+    if (!state.launch.valid) { state.launch = { valid: false, error: "No launches scheduled" }; renderLaunch(); }
+  } catch (e) {
+    if (!state.launch.valid) { state.launch = { valid: false, error: "Launch data unavailable right now" }; renderLaunch(); }
+  }
+}
+
+function launchStatusColor(status){
+  // Plain hex (not a CSS var) so callers can safely append an alpha suffix, e.g. "#3ddc8433".
+  if (status === "Go") return "#3ddc84";
+  if (status === "TBC") return "#ffb454";
+  if (status === "Hold") return "#ff8a3d";
+  return "#5a6178";
+}
+
+function launchTimeKnown(l){
+  return l.precision === "Second" || l.precision === "Minute" || l.precision === "Hour" || l.precision === "";
+}
+
+function launchWhenText(l){
+  const d = new Date(l.timeMs);
+  const dayStr = d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+  if (launchTimeKnown(l)){
+    return dayStr + "  " + d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  } else if (l.precision === "Day" || l.precision === "Morning" || l.precision === "Afternoon"){
+    return dayStr + "  (time TBD)";
+  }
+  return "NET " + d.toLocaleDateString(undefined, { month: "short", year: "numeric" });
+}
+
+function countdownText(l){
+  const secs = Math.round((l.timeMs - Date.now()) / 1000);
+  if (!launchTimeKnown(l) || secs <= 0) return "";
+  if (secs >= 86400) return "  (in " + Math.floor(secs/86400) + "d " + Math.floor((secs%86400)/3600) + "h)";
+  if (secs >= 3600)  return "  (in " + Math.floor(secs/3600) + "h " + Math.floor((secs%3600)/60) + "m)";
+  return "  (in " + Math.max(1, Math.round(secs/60)) + " min)";
+}
+
+function renderLaunch(){
+  const box = el("launchBox");
+  const l = state.launch;
+  if (!l.valid){
+    box.innerHTML = '<div class="placeholder">' + l.error + '</div>';
+    box.onclick = null;
+    return;
+  }
+  box.innerHTML =
+    '<div class="launchTop">' +
+      '<div class="launchMission">' + escapeHtml(l.mission || "Unnamed mission") + '</div>' +
+      '<div class="launchStatus" style="background:' + launchStatusColor(l.status) + '22; color:' + launchStatusColor(l.status) + '">' + escapeHtml(l.status || "") + '</div>' +
+    '</div>' +
+    '<div class="launchWhen">' + escapeHtml(launchWhenText(l)) + '<span id="ldCountdownInline">' + escapeHtml(countdownText(l)) + '</span></div>' +
+    '<div class="launchMeta">' + escapeHtml([l.rocket, l.pad].filter(Boolean).join("  ·  ")) + '</div>' +
+    (l.desc ? '<div class="launchDesc">' + escapeHtml(l.desc) + '</div>' : '') +
+    '<div class="tapHint">Tap for full details ›</div>';
+  box.onclick = openLaunchModal;
+}
+
+function openLaunchModal(){
+  const l = state.launch;
+  if (!l.valid) return;
+  el("ldMission").textContent = l.mission || "Unnamed mission";
+  el("ldWho").textContent = [l.provider, l.rocket, l.pad].filter(Boolean).join("  ·  ");
+  el("ldWhen").textContent = launchWhenText(l) + countdownText(l);
+  el("ldOrbit").textContent = l.orbit ? ("Orbit: " + l.orbit) : "";
+  el("ldDesc").textContent = l.desc || "No description available.";
+  el("launchModal").classList.add("open");
+  state.detailsOpen = true;
+}
+function closeLaunchModal(){ el("launchModal").classList.remove("open"); state.detailsOpen = false; }
+el("launchClose").addEventListener("click", closeLaunchModal);
+el("launchModal").addEventListener("click", (e) => { if (e.target.id === "launchModal") closeLaunchModal(); });
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+}
+
+/* =====================================================================
+   DRAWING: sky map + moon phase icon
+   ===================================================================== */
+const canvas = el("skyCanvas");
+const ctx = canvas.getContext("2d");
+const phaseCanvas = el("phaseCanvas");
+const phaseCtx = phaseCanvas.getContext("2d");
+
+function drawMoonDisc(g, cx, cy, r, A, lit, dark){
+  g.fillStyle = dark;
+  g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
+  const c = cosd(A);
+  g.fillStyle = lit;
+  for (let dy = -r; dy <= r; dy++){
+    const w = Math.sqrt(Math.max(0, r*r - dy*dy));
+    let x1, x2;
+    if (A < 180) { x1 = w * c; x2 = w; } else { x1 = -w; x2 = -w * c; }
+    if (x2 >= x1) g.fillRect(cx + x1, cy + dy, Math.max(1, x2 - x1), 1);
+  }
+}
+
+function drawLabel(g, text, x, y, color, canvasW){
+  g.font = "11px -apple-system, sans-serif";
+  g.fillStyle = color;
+  const w = g.measureText(text).width;
+  if (x + 6 + w <= canvasW - 4){ g.textAlign = "left"; g.fillText(text, x + 6, y + 3); }
+  else { g.textAlign = "right"; g.fillText(text, x - 6, y + 3); }
+}
+
+function drawCompass(g, cx, cy, r){
+  g.strokeStyle = "rgba(180,185,200,0.5)"; g.lineWidth = 1;
+  g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
+  g.fillStyle = "#ff5a5a";
+  g.beginPath(); g.moveTo(cx, cy - r*0.9); g.lineTo(cx - r*0.35, cy); g.lineTo(cx + r*0.35, cy); g.closePath(); g.fill();
+  g.fillStyle = "rgba(180,185,200,0.6)";
+  g.beginPath(); g.moveTo(cx, cy + r*0.9); g.lineTo(cx - r*0.35, cy); g.lineTo(cx + r*0.35, cy); g.closePath(); g.fill();
+  g.font = "11px -apple-system, sans-serif"; g.textAlign = "center";
+  g.fillStyle = "#ff5a5a"; g.fillText("E", cx, cy - r*1.6);
+  g.fillStyle = "rgba(180,185,200,0.8)";
+  g.fillText("W", cx, cy + r*1.75);
+  g.fillText("N", cx - r*1.7, cy + 4);
+  g.fillText("S", cx + r*1.7, cy + 4);
+}
+
+function drawSky(now){
+  if (state.lat == null) return;
+  const W = canvas.width, H = canvas.height;
+  const mapCx = W/2, mapCy = H/2, mapR = Math.min(W,H) * 0.42;
+
+  const sunH = sunAltAz(now, state.lat, state.lon);
+  const moon = moonAt(now, state.lat, state.lon);
+
+  let skyColor, stateText, stateColor;
+  if (sunH.alt > 0){ skyColor = "rgb(25,55,110)"; stateText = "Daylight"; stateColor = "rgb(120,170,255)"; }
+  else if (sunH.alt > -12){ skyColor = "rgb(14,24,60)"; stateText = "Twilight"; stateColor = "rgb(150,150,225)"; }
+  else { skyColor = "rgb(4,4,20)"; stateText = "Night"; stateColor = "rgb(130,130,160)"; }
+  el("stateBadge").textContent = stateText;
+  el("stateBadge").style.color = stateColor;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Sky disc + altitude rings
+  ctx.beginPath(); ctx.arc(mapCx, mapCy, mapR, 0, Math.PI*2); ctx.fillStyle = skyColor; ctx.fill();
+  ctx.strokeStyle = "rgba(80,85,110,0.5)"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(mapCx, mapCy, mapR*2/3, 0, Math.PI*2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(mapCx, mapCy, mapR*1/3, 0, Math.PI*2); ctx.stroke();
+  ctx.strokeStyle = "rgba(150,150,170,0.7)";
+  ctx.beginPath(); ctx.arc(mapCx, mapCy, mapR, 0, Math.PI*2); ctx.stroke();
+
+  function toPx(u){ return { x: mapCx + u.x * mapR, y: mapCy + u.y * mapR }; }
+
+  // Milky Way (recomputed every 30s while dark enough to matter)
+  const showMw = sunH.alt < -12;
+  if (showMw){
+    if (!state.mw || now - state.mwCalcAt > 30){
+      state.mw = computeMilkyWay(now, state.lat, state.lon);
+      state.mwCalcAt = now;
+    }
+    let f = 0.55;
+    const dark = Math.max(0, Math.min(1, (-12 - sunH.alt) / 6));
+    f *= dark;
+    if (moon.alt > 0){
+      const s0 = sunAt(dayNumber(now));
+      const litFrac = (1 - cosd(rev(moon.lon - s0.lon))) / 2;
+      f *= 1 - 0.7 * litFrac;
+    }
+    for (const pt of state.mw){
+      const u = plotUnit(pt.alt, pt.az);
+      if (!u) continue;
+      const p = toPx(u);
+      const k = pt.level * f;
+      ctx.fillStyle = "rgba(190,190,220," + Math.min(0.9, k).toFixed(2) + ")";
+      ctx.fillRect(p.x - 1, p.y - 1, 2.4, 2.4);
+    }
+  }
+
+  // Stars
+  if (sunH.alt < -6){
+    const lst = localSiderealTime(now, state.lon);
+    for (const s of STARS){
+      const h = equatorialToHorizon(s.raH * 15, s.dec, lst, state.lat);
+      if (h.alt <= 0) continue;
+      const u = plotUnit(h.alt, h.az);
+      if (!u) continue;
+      const p = toPx(u);
+      ctx.fillStyle = s.mag < 0.5 ? "#ffffff" : "rgba(210,210,220,0.85)";
+      ctx.beginPath(); ctx.arc(p.x, p.y, s.mag < 0.5 ? 1.6 : 1.1, 0, Math.PI*2); ctx.fill();
+      drawLabel(ctx, s.name, p.x, p.y, "rgba(150,150,175,0.85)", W);
+    }
+  }
+
+  // Planets
+  for (let i = 0; i < PLANETS.length; i++){
+    const h = planetAltAz(i, now, state.lat, state.lon);
+    if (h.alt <= 0) continue;
+    const u = plotUnit(h.alt, h.az);
+    if (!u) continue;
+    const p = toPx(u);
+    ctx.fillStyle = PLANETS[i].color;
+    ctx.beginPath(); ctx.arc(p.x, p.y, 3.2, 0, Math.PI*2); ctx.fill();
+    drawLabel(ctx, PLANETS[i].name, p.x, p.y, PLANETS[i].color, W);
+  }
+
+  // ISS
+  if (state.iss.valid){
+    const h = issAltAz(state.lat, state.lon, state.iss.lat, state.iss.lon, state.iss.heightKm);
+    if (h.alt > 0){
+      const u = plotUnit(h.alt, h.az);
+      if (u){
+        const p = toPx(u);
+        const c = state.iss.sunlit ? "#5be0ff" : "rgb(0,110,110)";
+        ctx.fillStyle = c;
+        ctx.fillRect(p.x - 3, p.y - 3, 6, 6);
+        drawLabel(ctx, "ISS", p.x, p.y, c, W);
+      }
+    }
+  }
+
+  // Moon
+  if (moon.alt > -0.5){
+    const u = plotUnit(moon.alt, moon.az);
+    if (u){
+      const p = toPx(u);
+      const s = sunAt(dayNumber(now));
+      drawMoonDisc(ctx, p.x, p.y, 8, rev(moon.lon - s.lon), "#ebebe1", "#37373f");
+      drawLabel(ctx, "Moon", p.x + 4, p.y, "#ebebe1", W);
+    }
+  }
+
+  // Sun
+  if (sunH.alt > -0.5){
+    const u = plotUnit(sunH.alt, sunH.az);
+    if (u){
+      const p = toPx(u);
+      ctx.fillStyle = "#ffd23f";
+      ctx.beginPath(); ctx.arc(p.x, p.y, 7, 0, Math.PI*2); ctx.fill();
+      drawLabel(ctx, "Sun", p.x + 4, p.y, "#ffd23f", W);
+    }
+  }
+
+  drawCompass(ctx, mapR * 0.28 + 10, H - mapR * 0.28 - 10, mapR * 0.16);
+
+  ctx.textAlign = "left"; ctx.font = "11px -apple-system, sans-serif";
+  ctx.fillStyle = "rgba(120,120,145,0.85)";
+  ctx.fillText("center = overhead", 10, H - 12);
+}
+
+function renderPanel(now){
+  if (!state.events) return;
+  const fmt = (t) => t ? new Date(t*1000).toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" }) : "none today";
+  el("sunRise").textContent = fmt(state.events.sunRise);
+  el("sunSet").textContent = fmt(state.events.sunSet);
+  el("moonRise").textContent = fmt(state.events.moonRise);
+  el("moonSet").textContent = fmt(state.events.moonSet);
+
+  if (state.events.nextFullMoon){
+    const fm = new Date(state.events.nextFullMoon * 1000);
+    const today = new Date(now * 1000);
+    const isToday = fm.getFullYear()===today.getFullYear() && fm.getMonth()===today.getMonth() && fm.getDate()===today.getDate();
+    el("fullMoon").textContent = isToday ? "Today" : fm.toLocaleDateString(undefined, { weekday:"short", month:"short", day:"numeric" });
+  } else {
+    el("fullMoon").textContent = "--";
+  }
+
+  const A = moonPhaseAngle(now, state.lat, state.lon);
+  const pct = Math.round((1 - cosd(A)) / 2 * 100);
+  el("phaseName").textContent = phaseName(A);
+  el("phasePct").textContent = pct + "% lit";
+  phaseCtx.clearRect(0,0,64,64);
+  drawMoonDisc(phaseCtx, 32, 32, 28, A, "#ebebe1", "#37373f");
+}
+
+/* =====================================================================
+   MAIN LOOP
+   ===================================================================== */
+function fitCanvas(){
+  const size = canvas.getBoundingClientRect().width;
+  const dpr = window.devicePixelRatio || 1;
+  const px = Math.max(300, Math.round(size * dpr));
+  if (canvas.width !== px){ canvas.width = px; canvas.height = px; }
+}
+window.addEventListener("resize", fitCanvas);
+
+let lastDaySeen = null;
+
+function tick(){
+  const now = Math.floor(Date.now() / 1000);
+
+  el("clock").textContent = new Date(now*1000).toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit", second:"2-digit" });
+  el("dateLabel").textContent = new Date(now*1000).toLocaleDateString(undefined, { weekday:"short", month:"short", day:"numeric" });
+
+  if (state.lat != null){
+    const today = new Date(now*1000).getDate();
+    if (!state.events || lastDaySeen !== today){
+      state.events = computeDailyEvents(now, state.lat, state.lon);
+      lastDaySeen = today;
+      renderPanel(now);
+    }
+    fitCanvas();
+    drawSky(now);
+    renderPanel(now);
+  }
+
+  if (state.launch.valid && !state.detailsOpen){
+    const inline = el("ldCountdownInline");
+    if (inline) inline.textContent = countdownText(state.launch);
+  }
+  if (state.detailsOpen && state.launch.valid){
+    el("ldWhen").textContent = launchWhenText(state.launch) + countdownText(state.launch);
+  }
+}
+
+function boot(){
+  const saved = loadSavedLocation();
+  if (saved){
+    saveLocation(saved.lat, saved.lon, saved.source);
+    if (saved.source === "gps") requestGps(() => {}); // refresh silently if possible
+  } else {
+    requestGps(() => openLocationModal());
+  }
+
+  fetchISS();
+  fetchLaunch();
+  setInterval(fetchISS, 15000);
+  setInterval(fetchLaunch, 60 * 60 * 1000);
+
+  setInterval(tick, 1000);
+  tick();
+}
+
+boot();
+</script>
+</body>
+</html>
