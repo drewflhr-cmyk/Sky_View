@@ -123,6 +123,7 @@
           <div class="pct" id="phasePct">--</div>
         </div>
       </div>
+      <div class="meteorRow" id="nextPlanetRise">--</div>
       <div class="meteorRow" id="meteorShower">--</div>
 
       <div class="divider"></div>
@@ -635,6 +636,7 @@ const state = {
   tides: { high: null, low: null },  // next predicted high/low tide (computed offline)
   ocean: { waterTempF: null, seasFt: null, windMph: null, windDirDeg: null, loaded: false }, // live ocean conditions (needs connection)
   view: { az: 90, compassOn: false, nudge: 0 }, // az = azimuth currently drawn at the top of the sky map (90 = facing East, the default)
+  nextPlanet: { name: null, sec: null }, // next below-horizon planet to rise (computed offline)
 };
 
 const el = (id) => document.getElementById(id);
@@ -1216,10 +1218,14 @@ function drawSky(now){
   ctx.textAlign = "left";
   ctx.fillText("center = overhead", 10, labelFont + 4);
   // Stacked under the line above (top-left) rather than bottom-right, so it stays
-  // clear of the Face/rotate button bar docked along the bottom of the map.
+  // clear of the Face/rotate button bar docked along the bottom of the map. Split
+  // across two short lines rather than one long one, so neither line's text runs
+  // far enough right to touch the sky disc.
   const hintFont = Math.max(9, Math.round(labelFont * 0.8));
+  const lineGap = hintFont + 4;
   ctx.font = hintFont + "px -apple-system, sans-serif";
-  ctx.fillText("Click on celestial object for more detail", 10, labelFont + hintFont + 8);
+  ctx.fillText("Click on celestial object", 10, labelFont + 4 + lineGap);
+  ctx.fillText("for more detail", 10, labelFont + 4 + lineGap * 2);
 }
 
 // Tap/click any object drawn on the map (Sun, Moon, planet, star, constellation)
@@ -1390,6 +1396,49 @@ function renderTides(){
   el("tideLowVal").textContent = fmt(state.tides.low);
 }
 
+/* Next planet to rise -- of the 5 naked-eye planets currently BELOW the
+   horizon (already-risen ones don't count, since they're not "next"),
+   finds whichever one crosses alt=0 soonest. Fully offline, same
+   orbital-mechanics math already used to plot the planets on the map. */
+function nextPlanetRise(fromSec, lat, lon){
+  const stepSec = 300, horizon = fromSec + 3 * 86400; // scan up to 3 days ahead
+  let best = null;
+  for (let i = 0; i < PLANETS.length; i++){
+    let prev = planetAltAz(i, fromSec, lat, lon).alt;
+    if (prev > 0) continue; // already up right now -- not "next to rise"
+    for (let t = fromSec + stepSec; t <= horizon; t += stepSec){
+      const alt = planetAltAz(i, t, lat, lon).alt;
+      if (prev <= 0 && alt > 0){
+        let lo = t - stepSec, hi = t;
+        for (let k = 0; k < 10; k++){
+          const mid = lo + Math.floor((hi - lo) / 2);
+          if (planetAltAz(i, mid, lat, lon).alt > 0) hi = mid; else lo = mid;
+        }
+        if (!best || hi < best.sec) best = { name: PLANETS[i].name, sec: hi };
+        break;
+      }
+      prev = alt;
+    }
+  }
+  return best;
+}
+
+// Same "only recompute once it's stale" approach as ensureTides() above.
+function ensureNextPlanet(now){
+  const n = state.nextPlanet;
+  if (!n.sec || now >= n.sec){
+    state.nextPlanet = nextPlanetRise(now, state.lat, state.lon) || { name: null, sec: null };
+  }
+}
+
+function renderNextPlanet(){
+  const n = state.nextPlanet;
+  const rowEl = el("nextPlanetRise");
+  if (!n.name || !n.sec){ rowEl.textContent = "All visible planets are already up"; return; }
+  const when = new Date(n.sec * 1000).toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" });
+  rowEl.innerHTML = "Next planet to rise: <span class=\"name\">" + escapeHtml(n.name) + "</span> &mdash; " + when;
+}
+
 /* =====================================================================
    MAIN LOOP
    ===================================================================== */
@@ -1434,6 +1483,8 @@ function tick(){
     fitCanvas();
     drawSky(now);
     renderPanel(now);
+    ensureNextPlanet(now);
+    renderNextPlanet();
   }
 
   if (state.detailsOpenIdx === -1){
