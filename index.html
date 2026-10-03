@@ -1215,9 +1215,11 @@ function drawSky(now){
   ctx.font = labelFont + "px -apple-system, sans-serif";
   ctx.textAlign = "left";
   ctx.fillText("center = overhead", 10, labelFont + 4);
-  ctx.font = Math.max(9, Math.round(labelFont * 0.8)) + "px -apple-system, sans-serif";
-  ctx.textAlign = "right";
-  ctx.fillText("Click on celestial object for more detail", W - 10, H - 12);
+  // Stacked under the line above (top-left) rather than bottom-right, so it stays
+  // clear of the Face/rotate button bar docked along the bottom of the map.
+  const hintFont = Math.max(9, Math.round(labelFont * 0.8));
+  ctx.font = hintFont + "px -apple-system, sans-serif";
+  ctx.fillText("Click on celestial object for more detail", 10, labelFont + hintFont + 8);
 }
 
 // Tap/click any object drawn on the map (Sun, Moon, planet, star, constellation)
