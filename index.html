@@ -25,7 +25,8 @@
   header .locBtn:active{background:var(--panel);}
   .layout{display:flex; flex:1; flex-wrap:wrap;}
   .mapPanel{position:relative; flex:1 1 320px; min-width:280px; display:flex;
-    align-items:flex-start; justify-content:center; padding:10px;}
+    align-items:flex-start; justify-content:center; padding:10px;
+    align-self:flex-start;} /* without this, .layout's default row-stretch makes mapPanel as tall as the (much taller) infoPanel on wide screens, pushing the absolutely-positioned compass bar far below the actual map */
   .mapPanel canvas{width:100%; max-width:420px; aspect-ratio:1/1; display:block;}
   .stateBadge{position:absolute; top:16px; right:16px; font-size:0.75rem; padding:3px 9px;
     border-radius:10px; background:rgba(255,255,255,0.06); color:var(--dim);}
@@ -490,25 +491,48 @@ const CONSTELLATIONS = [
 // and peak date. Peak dates shift by at most a day or two year to year; close
 // enough for a "what's coming up" display.
 const METEOR_SHOWERS = [
-  { name: "Quadrantids", active: "Dec 26 – Jan 16", peakMonth: 1, peakDay: 4,
+  // raH/dec = the shower's radiant (where its meteors appear to streak from), J2000, used to
+  // calculate which direction to look. bestHour = a typical best local-time hour to watch on
+  // the peak night (usually once the radiant is well up and the sky's darkest).
+  { name: "Quadrantids", active: "Dec 26 – Jan 16", peakMonth: 1, peakDay: 4, raH: 15.33, dec: 49, bestHour: 3,
     desc: "One of the strongest annual showers, with a sharp peak lasting only a few hours rather than a long gentle maximum, so timing matters more than usual. Its radiant sits in what used to be the constellation Quadrans Muralis (the 'Mural Quadrant'), near the handle of the Big Dipper -- the shower kept the old name even though the constellation itself was dropped in 1922. Unusually, its parent isn't a classic icy comet but the asteroid 2003 EH1, thought to be a burnt-out comet nucleus." },
-  { name: "Lyrids", active: "Apr 14 – 30", peakMonth: 4, peakDay: 22,
+  { name: "Lyrids", active: "Apr 14 – 30", peakMonth: 4, peakDay: 22, raH: 18.07, dec: 34, bestHour: 3,
     desc: "A modest but reliable shower that's been observed and recorded for over 2,700 years, among the oldest known meteor showers. Its parent is Comet C/1861 G1 (Thatcher), which swings by only once every ~415 years, leaving a debris trail Earth crosses every April. The radiant is near Vega in Lyra, and while typical rates are modest, it occasionally produces unpredictable bright fireballs." },
-  { name: "Eta Aquariids", active: "Apr 19 – May 28", peakMonth: 5, peakDay: 6,
+  { name: "Eta Aquariids", active: "Apr 19 – May 28", peakMonth: 5, peakDay: 6, raH: 22.53, dec: -1, bestHour: 4,
     desc: "Made of dust shed by Halley's Comet -- the same parent body as October's Orionids, just a different part of its debris trail. The radiant sits low near Aquarius, so this shower favors the southern hemisphere and the hours before dawn; from Florida it's still worth a look since the radiant does clear the horizon. Its meteors are among the fastest of any shower, slamming into the atmosphere at about 66 km/s (150,000 mph), which makes for quick, bright streaks." },
-  { name: "Southern Delta Aquariids", active: "Jul 12 – Aug 23", peakMonth: 7, peakDay: 30,
+  { name: "Southern Delta Aquariids", active: "Jul 12 – Aug 23", peakMonth: 7, peakDay: 30, raH: 22.60, dec: -16, bestHour: 3,
     desc: "A lesser-known shower that overlaps with the much more famous Perseids, so its meteors are often seen without being recognized as a separate shower. Like the Eta Aquariids, its radiant is deep in the southern sky near Aquarius, favoring southern latitudes and pre-dawn viewing. Rates are modest -- usually well under 20 per hour even at the peak -- but it adds a steady trickle of extra meteors to late-summer nights." },
-  { name: "Perseids", active: "Jul 14 – Sep 1", peakMonth: 8, peakDay: 12,
+  { name: "Perseids", active: "Jul 14 – Sep 1", peakMonth: 8, peakDay: 12, raH: 3.07, dec: 58, bestHour: 2,
     desc: "The most popular meteor shower of the year for most of the US, peaking on warm August nights and often producing 50-100+ meteors per hour under dark skies. Its parent is Comet 109P/Swift-Tuttle, a large nucleus (about 16 miles across) that last passed near Earth in 1992 and won't return until 2126. The radiant is in Perseus, rising in the northeast after dark and climbing higher through the night, and the shower is known for producing an above-average share of bright fireballs." },
-  { name: "Orionids", active: "Oct 2 – Nov 7", peakMonth: 10, peakDay: 21,
+  { name: "Orionids", active: "Oct 2 – Nov 7", peakMonth: 10, peakDay: 21, raH: 6.33, dec: 16, bestHour: 2,
     desc: "Debris from Halley's Comet -- Earth crosses this same comet's trail twice a year, producing the Eta Aquariids in May and the Orionids in October. Meteors appear to streak away from a radiant near Orion's upraised 'club,' and because they hit the atmosphere fast (about 66 km/s), they often leave glowing trails that linger a second or two after the flash. Typical peak rates run 10-20 per hour." },
-  { name: "Leonids", active: "Nov 3 – Dec 2", peakMonth: 11, peakDay: 17,
+  { name: "Leonids", active: "Nov 3 – Dec 2", peakMonth: 11, peakDay: 17, raH: 10.20, dec: 22, bestHour: 2,
     desc: "Famous for producing true meteor storms -- thousands of meteors per hour -- roughly every 33 years when Earth passes through an especially dense, recent clump of debris from parent Comet 55P/Tempel-Tuttle, most memorably in 1833 and 1966. In an ordinary year (like this one) rates are far more modest, typically 10-15 per hour, with a radiant in Leo that rises late and is best seen after midnight." },
-  { name: "Geminids", active: "Dec 4 – 17", peakMonth: 12, peakDay: 14,
+  { name: "Geminids", active: "Dec 4 – 17", peakMonth: 12, peakDay: 14, raH: 7.47, dec: 33, bestHour: 1,
     desc: "Often the single best shower of the year, with reliably high rates -- over 100 per hour at a good peak -- and bright, slow-moving, often yellowish meteors that are easy to watch even for casual observers. Unusually, its parent isn't an icy comet but 3200 Phaethon, a rocky asteroid-like body on a comet-like orbit that gets so close to the Sun its surface cracks and sheds the debris that makes this shower. The radiant is near Castor in Gemini and is well placed for Florida's latitude." },
-  { name: "Ursids", active: "Dec 17 – 26", peakMonth: 12, peakDay: 22,
+  { name: "Ursids", active: "Dec 17 – 26", peakMonth: 12, peakDay: 22, raH: 14.47, dec: 76, bestHour: 2,
     desc: "A minor, often-overlooked shower that peaks right around the winter solstice, competing for attention with the Geminids just a week earlier. Its parent is Comet 8P/Tuttle, and its radiant sits near Kochab in Ursa Minor (the Little Dipper's bowl), close enough to the pole that it's up all night from Florida's latitude, even if it never climbs very high. Rates are modest, usually 5-10 per hour, occasionally more in an outburst year." },
 ];
+
+// Works out which compass direction (and roughly how high up) the shower's radiant
+// is in, around its peak night, for the viewer's actual location -- rather than a
+// fixed hardcoded direction, since that depends on latitude and time of night.
+// Scans forward a few hours from the shower's usual best-viewing hour in case the
+// radiant hasn't cleared the horizon yet right at that hour.
+function meteorViewingTip(sh, peakDate, lat, lon){
+  for (let h = 0; h < 8; h++){
+    const d = new Date(peakDate.getFullYear(), peakDate.getMonth(), peakDate.getDate(), sh.bestHour + h, 0, 0);
+    const lst = localSiderealTime(Math.floor(d.getTime() / 1000), lon);
+    const pos = equatorialToHorizon(sh.raH * 15, sh.dec, lst, lat);
+    if (pos.alt > 10){
+      const dir = degToCompass(pos.az);
+      const height = pos.alt > 60 ? "high overhead" : pos.alt > 30 ? "partway up the sky" : "low in the sky";
+      const timeStr = d.toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" });
+      return "Around its peak, it's best viewed around " + timeStr + ", looking toward the " + dir + " (" + height + ").";
+    }
+  }
+  return null;
+}
 
 function nextMeteorShower(nowSec){
   const today = new Date(nowSec * 1000);
@@ -517,7 +541,7 @@ function nextMeteorShower(nowSec){
     let peak = new Date(today.getFullYear(), sh.peakMonth - 1, sh.peakDay);
     if (peak < today) peak = new Date(today.getFullYear() + 1, sh.peakMonth - 1, sh.peakDay);
     const delta = peak - today;
-    if (delta < bestDelta){ bestDelta = delta; best = { name: sh.name, active: sh.active, peakDate: peak, desc: sh.desc }; }
+    if (delta < bestDelta){ bestDelta = delta; best = { name: sh.name, active: sh.active, peakDate: peak, desc: sh.desc, raH: sh.raH, dec: sh.dec, bestHour: sh.bestHour }; }
   }
   return best;
 }
@@ -1426,7 +1450,9 @@ function renderPanel(now){
 
   const ms = nextMeteorShower(now);
   if (ms){
-    state.meteorShowerInfo = ms; // so the click handler below has it, however long ago this render happened
+    const tip = meteorViewingTip(ms, ms.peakDate, state.lat, state.lon);
+    // So the click handler below has it, however long ago this render happened.
+    state.meteorShowerInfo = { name: ms.name, desc: ms.desc + (tip ? " " + tip : "") };
     const days = Math.round((ms.peakDate.getTime() - now*1000) / 86400000);
     const when = days <= 0 ? "peaking now" : days === 1 ? "peaks tomorrow" : "peaks in " + days + " days";
     el("meteorShower").innerHTML = "Next meteor shower: <span class=\"name clickable\">" + escapeHtml(ms.name) + "</span>" +
