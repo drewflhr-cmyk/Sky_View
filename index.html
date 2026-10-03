@@ -38,6 +38,7 @@
   .compassBar button.on{color:var(--good); border-color:var(--good);}
   .infoPanel{flex:1 1 300px; min-width:280px; padding:14px 16px 28px; border-left:1px solid var(--line);}
   @media (max-width:700px){ .infoPanel{border-left:none; border-top:1px solid var(--line);} }
+  .bottomPanel{max-width:480px; margin:0 auto; padding:14px 16px 28px; border-top:1px solid var(--line);}
   .row{display:flex; justify-content:space-between; align-items:baseline; padding:6px 0; font-size:0.95rem;}
   .row .label{color:var(--dim);}
   .row .val{font-weight:600;}
@@ -116,7 +117,7 @@
       <div class="row"><span class="label">Sunset</span><span class="val" id="sunSet" style="color:var(--sun)">--</span></div>
       <div class="row"><span class="label">Moonrise</span><span class="val" id="moonRise" style="color:var(--moon)">--</span></div>
       <div class="row"><span class="label">Moonset</span><span class="val" id="moonSet" style="color:var(--moon)">--</span></div>
-      <div class="row"><span class="label">Full Moon</span><span class="val" id="fullMoon" style="color:var(--moon)">--</span></div>
+      <div class="row"><span class="label">Next Full Moon</span><span class="val" id="fullMoon" style="color:var(--moon)">--</span></div>
 
       <div class="phaseBlock">
         <canvas id="phaseCanvas" width="64" height="64" style="width:40px;height:40px;"></canvas>
@@ -159,6 +160,15 @@
   <footer>
     Sun/Moon/planet/ISS positions calculated on this page. ISS position and launch schedule need an internet connection to update.
   </footer>
+
+  <div class="bottomPanel">
+    <div class="sectionTitle">Small Point, ME Ocean Conditions</div>
+    <div class="row"><span class="label">Next High Tide</span><span class="val" id="tideHighValME">--</span></div>
+    <div class="row"><span class="label">Next Low Tide</span><span class="val" id="tideLowValME">--</span></div>
+    <div class="row"><span class="label">Water Temp</span><span class="val" id="oceanTempValME">--</span></div>
+    <div class="row"><span class="label">Seas</span><span class="val" id="oceanSeasValME">--</span></div>
+    <div class="row"><span class="label">Wind</span><span class="val" id="oceanWindValME">--</span></div>
+  </div>
 </div>
 
 <!-- Location override modal -->
@@ -675,6 +685,7 @@ const state = {
   view: { az: 90, compassOn: false, nudge: 0 }, // az = azimuth currently drawn at the top of the sky map (90 = facing East, the default)
   nextPlanet: { name: null, sec: null }, // next below-horizon planet to rise (computed offline)
   meteorShowerInfo: null, // the currently-displayed next-meteor-shower object, for its click-to-info popup
+  oceanME: { tideHigh: null, tideLow: null, waterTempF: null, seasFt: null, windMph: null, windDirDeg: null, loaded: false }, // Small Point, ME ocean conditions (needs connection)
 };
 
 const el = (id) => document.getElementById(id);
@@ -928,6 +939,83 @@ function renderOcean(){
   el("oceanSeasVal").textContent = (o.seasFt != null) ? o.seasFt.toFixed(1) + " ft" : (o.loaded ? "unavailable" : "loading…");
   if (o.windMph != null && o.windDirDeg != null) el("oceanWindVal").textContent = Math.round(o.windMph) + " mph " + degToCompass(o.windDirDeg);
   else el("oceanWindVal").textContent = o.loaded ? "unavailable" : "loading…";
+}
+
+/* Small Point, ME Ocean Conditions -- same idea as the Jensen Beach box above
+   (Open-Meteo for water temp/seas/wind), plus a real tide prediction for this
+   one instead of an offline harmonic model: NOAA's own CO-OPS API already
+   computes predictions server-side for any station, including subordinate
+   ones, so there's no need to re-derive a harmonic fit for a second, much
+   farther-away coastline. Needs a connection either way, like the rest of
+   this box. */
+const SMALLPOINT_LAT = 43.76, SMALLPOINT_LON = -69.82; // open water just off Small Point/Hermit Island, Phippsburg, ME
+const SMALLPOINT_TIDE_STATION = "8417221"; // NOAA CO-OPS subordinate station "Phippsburg, ME" -- nearest listed tide station to Small Point
+
+function noaaDateStr(d){
+  return "" + d.getFullYear() + String(d.getMonth()+1).padStart(2,"0") + String(d.getDate()).padStart(2,"0");
+}
+function parseNoaaLocalTime(t){
+  // NOAA returns "YYYY-MM-DD HH:MM" in the station's own local wall-clock time
+  // (time_zone=lst_ldt below) -- Phippsburg, ME and Jensen Beach, FL share the
+  // same US time zone, so this reads the same way local times are handled
+  // elsewhere on this page.
+  const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(t);
+  if (!m) return null;
+  return new Date(+m[1], +m[2]-1, +m[3], +m[4], +m[5]).getTime() / 1000;
+}
+
+async function fetchOceanME(){
+  const now = new Date();
+  const begin = noaaDateStr(now);
+  const end = noaaDateStr(new Date(now.getTime() + 2 * 86400000));
+  const results = await Promise.allSettled([
+    fetch("https://marine-api.open-meteo.com/v1/marine?latitude=" + SMALLPOINT_LAT + "&longitude=" + SMALLPOINT_LON +
+      "&current=wave_height,sea_surface_temperature", { cache: "no-store" }).then((r) => r.json()),
+    fetch("https://api.open-meteo.com/v1/forecast?latitude=" + SMALLPOINT_LAT + "&longitude=" + SMALLPOINT_LON +
+      "&current=wind_speed_10m,wind_direction_10m&wind_speed_unit=mph", { cache: "no-store" }).then((r) => r.json()),
+    fetch("https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?begin_date=" + begin + "&end_date=" + end +
+      "&station=" + SMALLPOINT_TIDE_STATION + "&product=predictions&datum=MLLW&time_zone=lst_ldt&units=english&interval=hilo&format=json",
+      { cache: "no-store" }).then((r) => r.json()),
+  ]);
+  const [marineR, windR, tideR] = results;
+  if (marineR.status === "fulfilled" && marineR.value && marineR.value.current){
+    const c = marineR.value.current;
+    if (typeof c.sea_surface_temperature === "number") state.oceanME.waterTempF = c.sea_surface_temperature * 9/5 + 32;
+    if (typeof c.wave_height === "number") state.oceanME.seasFt = c.wave_height * 3.28084;
+  }
+  if (windR.status === "fulfilled" && windR.value && windR.value.current){
+    const c = windR.value.current;
+    if (typeof c.wind_speed_10m === "number") state.oceanME.windMph = c.wind_speed_10m;
+    if (typeof c.wind_direction_10m === "number") state.oceanME.windDirDeg = c.wind_direction_10m;
+  }
+  if (tideR.status === "fulfilled" && tideR.value && Array.isArray(tideR.value.predictions)){
+    const nowSec = Math.floor(Date.now() / 1000);
+    let nextHigh = null, nextLow = null;
+    for (const p of tideR.value.predictions){
+      const sec = parseNoaaLocalTime(p.t);
+      if (sec == null || sec < nowSec) continue;
+      if (p.type === "H" && !nextHigh) nextHigh = { sec, height: parseFloat(p.v) };
+      if (p.type === "L" && !nextLow) nextLow = { sec, height: parseFloat(p.v) };
+      if (nextHigh && nextLow) break;
+    }
+    state.oceanME.tideHigh = nextHigh;
+    state.oceanME.tideLow = nextLow;
+  }
+  state.oceanME.loaded = true;
+  renderOceanME();
+}
+
+function renderOceanME(){
+  const o = state.oceanME;
+  const fmtTide = (ev) => ev
+    ? new Date(ev.sec * 1000).toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" }) + " (" + ev.height.toFixed(1) + " ft)"
+    : (o.loaded ? "unavailable" : "loading…");
+  el("tideHighValME").textContent = fmtTide(o.tideHigh);
+  el("tideLowValME").textContent = fmtTide(o.tideLow);
+  el("oceanTempValME").textContent = (o.waterTempF != null) ? o.waterTempF.toFixed(0) + "°F" : (o.loaded ? "unavailable" : "loading…");
+  el("oceanSeasValME").textContent = (o.seasFt != null) ? o.seasFt.toFixed(1) + " ft" : (o.loaded ? "unavailable" : "loading…");
+  if (o.windMph != null && o.windDirDeg != null) el("oceanWindValME").textContent = Math.round(o.windMph) + " mph " + degToCompass(o.windDirDeg);
+  else el("oceanWindValME").textContent = o.loaded ? "unavailable" : "loading…";
 }
 
 async function toggleOutlook(){
@@ -1569,10 +1657,12 @@ function boot(){
   fetchLaunch();
   fetchSolar();
   fetchOcean();
+  fetchOceanME();
   setInterval(fetchISS, 15000);
   setInterval(fetchLaunch, 60 * 60 * 1000);
   setInterval(fetchSolar, 10 * 60 * 1000);
   setInterval(fetchOcean, 15 * 60 * 1000);
+  setInterval(fetchOceanME, 15 * 60 * 1000);
 
   setInterval(tick, 1000);
   tick();
