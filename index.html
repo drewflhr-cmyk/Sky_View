@@ -67,6 +67,8 @@
     max-height:280px; overflow:auto; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; color:#c7cbe0;}
   .meteorRow{font-size:0.95rem; padding:6px 0 10px; color:var(--dim); line-height:1.4;}
   .meteorRow .name{color:var(--text); font-weight:600;}
+  .meteorRow .name.clickable{cursor:pointer; text-decoration:underline; text-decoration-style:dotted; text-decoration-color:var(--dimmer);}
+  .meteorRow .name.clickable:active{color:var(--accent);}
   .modal{position:fixed; inset:0; background:rgba(0,0,0,0.6); display:none;
     align-items:center; justify-content:center; padding:16px; z-index:20;}
   .modal.open{display:flex;}
@@ -127,7 +129,7 @@
       <div class="meteorRow" id="meteorShower">--</div>
 
       <div class="divider"></div>
-      <div class="sectionTitle">Ocean Conditions</div>
+      <div class="sectionTitle">Ocean Conditions (Jensen Beach, FL)</div>
       <div class="row"><span class="label">Next High Tide</span><span class="val" id="tideHighVal">--</span></div>
       <div class="row"><span class="label">Next Low Tide</span><span class="val" id="tideLowVal">--</span></div>
       <div class="row"><span class="label">Water Temp</span><span class="val" id="oceanTempVal">--</span></div>
@@ -478,15 +480,24 @@ const CONSTELLATIONS = [
 // and peak date. Peak dates shift by at most a day or two year to year; close
 // enough for a "what's coming up" display.
 const METEOR_SHOWERS = [
-  { name: "Quadrantids", active: "Dec 26 – Jan 16", peakMonth: 1, peakDay: 4 },
-  { name: "Lyrids", active: "Apr 14 – 30", peakMonth: 4, peakDay: 22 },
-  { name: "Eta Aquariids", active: "Apr 19 – May 28", peakMonth: 5, peakDay: 6 },
-  { name: "Southern Delta Aquariids", active: "Jul 12 – Aug 23", peakMonth: 7, peakDay: 30 },
-  { name: "Perseids", active: "Jul 14 – Sep 1", peakMonth: 8, peakDay: 12 },
-  { name: "Orionids", active: "Oct 2 – Nov 7", peakMonth: 10, peakDay: 21 },
-  { name: "Leonids", active: "Nov 3 – Dec 2", peakMonth: 11, peakDay: 17 },
-  { name: "Geminids", active: "Dec 4 – 17", peakMonth: 12, peakDay: 14 },
-  { name: "Ursids", active: "Dec 17 – 26", peakMonth: 12, peakDay: 22 },
+  { name: "Quadrantids", active: "Dec 26 – Jan 16", peakMonth: 1, peakDay: 4,
+    desc: "One of the strongest annual showers, with a sharp peak lasting only a few hours rather than a long gentle maximum, so timing matters more than usual. Its radiant sits in what used to be the constellation Quadrans Muralis (the 'Mural Quadrant'), near the handle of the Big Dipper -- the shower kept the old name even though the constellation itself was dropped in 1922. Unusually, its parent isn't a classic icy comet but the asteroid 2003 EH1, thought to be a burnt-out comet nucleus." },
+  { name: "Lyrids", active: "Apr 14 – 30", peakMonth: 4, peakDay: 22,
+    desc: "A modest but reliable shower that's been observed and recorded for over 2,700 years, among the oldest known meteor showers. Its parent is Comet C/1861 G1 (Thatcher), which swings by only once every ~415 years, leaving a debris trail Earth crosses every April. The radiant is near Vega in Lyra, and while typical rates are modest, it occasionally produces unpredictable bright fireballs." },
+  { name: "Eta Aquariids", active: "Apr 19 – May 28", peakMonth: 5, peakDay: 6,
+    desc: "Made of dust shed by Halley's Comet -- the same parent body as October's Orionids, just a different part of its debris trail. The radiant sits low near Aquarius, so this shower favors the southern hemisphere and the hours before dawn; from Florida it's still worth a look since the radiant does clear the horizon. Its meteors are among the fastest of any shower, slamming into the atmosphere at about 66 km/s (150,000 mph), which makes for quick, bright streaks." },
+  { name: "Southern Delta Aquariids", active: "Jul 12 – Aug 23", peakMonth: 7, peakDay: 30,
+    desc: "A lesser-known shower that overlaps with the much more famous Perseids, so its meteors are often seen without being recognized as a separate shower. Like the Eta Aquariids, its radiant is deep in the southern sky near Aquarius, favoring southern latitudes and pre-dawn viewing. Rates are modest -- usually well under 20 per hour even at the peak -- but it adds a steady trickle of extra meteors to late-summer nights." },
+  { name: "Perseids", active: "Jul 14 – Sep 1", peakMonth: 8, peakDay: 12,
+    desc: "The most popular meteor shower of the year for most of the US, peaking on warm August nights and often producing 50-100+ meteors per hour under dark skies. Its parent is Comet 109P/Swift-Tuttle, a large nucleus (about 16 miles across) that last passed near Earth in 1992 and won't return until 2126. The radiant is in Perseus, rising in the northeast after dark and climbing higher through the night, and the shower is known for producing an above-average share of bright fireballs." },
+  { name: "Orionids", active: "Oct 2 – Nov 7", peakMonth: 10, peakDay: 21,
+    desc: "Debris from Halley's Comet -- Earth crosses this same comet's trail twice a year, producing the Eta Aquariids in May and the Orionids in October. Meteors appear to streak away from a radiant near Orion's upraised 'club,' and because they hit the atmosphere fast (about 66 km/s), they often leave glowing trails that linger a second or two after the flash. Typical peak rates run 10-20 per hour." },
+  { name: "Leonids", active: "Nov 3 – Dec 2", peakMonth: 11, peakDay: 17,
+    desc: "Famous for producing true meteor storms -- thousands of meteors per hour -- roughly every 33 years when Earth passes through an especially dense, recent clump of debris from parent Comet 55P/Tempel-Tuttle, most memorably in 1833 and 1966. In an ordinary year (like this one) rates are far more modest, typically 10-15 per hour, with a radiant in Leo that rises late and is best seen after midnight." },
+  { name: "Geminids", active: "Dec 4 – 17", peakMonth: 12, peakDay: 14,
+    desc: "Often the single best shower of the year, with reliably high rates -- over 100 per hour at a good peak -- and bright, slow-moving, often yellowish meteors that are easy to watch even for casual observers. Unusually, its parent isn't an icy comet but 3200 Phaethon, a rocky asteroid-like body on a comet-like orbit that gets so close to the Sun its surface cracks and sheds the debris that makes this shower. The radiant is near Castor in Gemini and is well placed for Florida's latitude." },
+  { name: "Ursids", active: "Dec 17 – 26", peakMonth: 12, peakDay: 22,
+    desc: "A minor, often-overlooked shower that peaks right around the winter solstice, competing for attention with the Geminids just a week earlier. Its parent is Comet 8P/Tuttle, and its radiant sits near Kochab in Ursa Minor (the Little Dipper's bowl), close enough to the pole that it's up all night from Florida's latitude, even if it never climbs very high. Rates are modest, usually 5-10 per hour, occasionally more in an outburst year." },
 ];
 
 function nextMeteorShower(nowSec){
@@ -496,7 +507,7 @@ function nextMeteorShower(nowSec){
     let peak = new Date(today.getFullYear(), sh.peakMonth - 1, sh.peakDay);
     if (peak < today) peak = new Date(today.getFullYear() + 1, sh.peakMonth - 1, sh.peakDay);
     const delta = peak - today;
-    if (delta < bestDelta){ bestDelta = delta; best = { name: sh.name, active: sh.active, peakDate: peak }; }
+    if (delta < bestDelta){ bestDelta = delta; best = { name: sh.name, active: sh.active, peakDate: peak, desc: sh.desc }; }
   }
   return best;
 }
@@ -566,12 +577,38 @@ function localMidnight(unixSec, addDays){
   return Math.floor(new Date(d.getFullYear(), d.getMonth(), d.getDate() + addDays, 0, 0, 0).getTime() / 1000);
 }
 
+// The Moon rises about 50 min later each day, so roughly once a month a given
+// calendar day has NO moonrise (or no moonset) at all -- it's the day before's
+// moonrise is still slipping past midnight. Rather than reporting "none today"
+// on those days, scan forward a few days from today's start until the next
+// rise/set actually shows up, same approach as the tide and planet-rise scans.
+function findNextMoonEvent(fromSec, lat, lon, rising){
+  const h0 = -0.833, stepSec = 300, maxHorizon = 5 * 86400;
+  let prev = moonAt(fromSec, lat, lon).alt - h0;
+  for (let t = fromSec + stepSec; t <= fromSec + maxHorizon; t += stepSec){
+    const cur = moonAt(t, lat, lon).alt - h0;
+    const crossed = rising ? (prev < 0 && cur >= 0) : (prev >= 0 && cur < 0);
+    if (crossed){
+      let lo = t - stepSec, hi = t;
+      for (let k = 0; k < 12; k++){
+        const mid = lo + Math.floor((hi - lo) / 2);
+        const v = moonAt(mid, lat, lon).alt - h0;
+        if ((v >= 0) === rising) hi = mid; else lo = mid;
+      }
+      return hi;
+    }
+    prev = cur;
+  }
+  return null;
+}
+
 function computeDailyEvents(now, lat, lon){
   const start = localMidnight(now, 0), end = localMidnight(now, 1);
   const sun = findRiseSet((t) => sunAltAz(t, lat, lon).alt, start, end);
-  const moon = findRiseSet((t) => moonAt(t, lat, lon).alt, start, end);
+  const moonRise = findNextMoonEvent(start, lat, lon, true);
+  const moonSet = findNextMoonEvent(start, lat, lon, false);
   const nextFullMoon = findNextFullMoon(start, lat, lon);
-  return { sunRise: sun.rise, sunSet: sun.set, moonRise: moon.rise, moonSet: moon.set, nextFullMoon, day: new Date(now*1000).getDate() };
+  return { sunRise: sun.rise, sunSet: sun.set, moonRise, moonSet, nextFullMoon, day: new Date(now*1000).getDate() };
 }
 
 function mwIntensity(l, b){
@@ -637,6 +674,7 @@ const state = {
   ocean: { waterTempF: null, seasFt: null, windMph: null, windDirDeg: null, loaded: false }, // live ocean conditions (needs connection)
   view: { az: 90, compassOn: false, nudge: 0 }, // az = azimuth currently drawn at the top of the sky map (90 = facing East, the default)
   nextPlanet: { name: null, sec: null }, // next below-horizon planet to rise (computed offline)
+  meteorShowerInfo: null, // the currently-displayed next-meteor-shower object, for its click-to-info popup
 };
 
 const el = (id) => document.getElementById(id);
@@ -1254,14 +1292,33 @@ canvas.addEventListener("click", (e) => {
   const hit = findTappedObject(e.clientX, e.clientY);
   if (hit) openObjModal(hit);
 });
+// The meteor-shower name re-renders on every tick, so the click handler is bound
+// once to the row (event delegation) and reads whatever is currently in
+// state.meteorShowerInfo rather than being re-attached on every render.
+el("meteorShower").addEventListener("click", (e) => {
+  if (e.target.classList.contains("name") && state.meteorShowerInfo){
+    openObjModal({ name: state.meteorShowerInfo.name, desc: state.meteorShowerInfo.desc });
+  }
+});
 
 function renderPanel(now){
   if (!state.events) return;
   const fmt = (t) => t ? new Date(t*1000).toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" }) : "none today";
   el("sunRise").textContent = fmt(state.events.sunRise);
   el("sunSet").textContent = fmt(state.events.sunSet);
-  el("moonRise").textContent = fmt(state.events.moonRise);
-  el("moonSet").textContent = fmt(state.events.moonSet);
+  // Moonrise/set can land on a different calendar day than "today" (the Moon
+  // rises ~50 min later each day, so some days have none at all) -- tag the
+  // time with a weekday whenever it isn't today, so it's clear which day it is.
+  const fmtMoonEvent = (t) => {
+    if (!t) return "unavailable";
+    const d = new Date(t * 1000);
+    const today = new Date(now * 1000);
+    const isToday = d.getFullYear()===today.getFullYear() && d.getMonth()===today.getMonth() && d.getDate()===today.getDate();
+    const timeStr = d.toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" });
+    return isToday ? timeStr : timeStr + " " + d.toLocaleDateString(undefined, { weekday:"short" });
+  };
+  el("moonRise").textContent = fmtMoonEvent(state.events.moonRise);
+  el("moonSet").textContent = fmtMoonEvent(state.events.moonSet);
 
   if (state.events.nextFullMoon){
     const fm = new Date(state.events.nextFullMoon * 1000);
@@ -1281,9 +1338,10 @@ function renderPanel(now){
 
   const ms = nextMeteorShower(now);
   if (ms){
+    state.meteorShowerInfo = ms; // so the click handler below has it, however long ago this render happened
     const days = Math.round((ms.peakDate.getTime() - now*1000) / 86400000);
     const when = days <= 0 ? "peaking now" : days === 1 ? "peaks tomorrow" : "peaks in " + days + " days";
-    el("meteorShower").innerHTML = "Next meteor shower: <span class=\"name\">" + escapeHtml(ms.name) + "</span>" +
+    el("meteorShower").innerHTML = "Next meteor shower: <span class=\"name clickable\">" + escapeHtml(ms.name) + "</span>" +
       " &mdash; active " + escapeHtml(ms.active) + " (" + when + ")";
   }
 }
