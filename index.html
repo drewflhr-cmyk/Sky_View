@@ -29,6 +29,13 @@
   .mapPanel canvas{width:100%; max-width:420px; aspect-ratio:1/1; display:block;}
   .stateBadge{position:absolute; top:16px; right:16px; font-size:0.75rem; padding:3px 9px;
     border-radius:10px; background:rgba(255,255,255,0.06); color:var(--dim);}
+  .compassBar{position:absolute; bottom:10px; left:50%; transform:translateX(-50%);
+    display:flex; align-items:center; gap:6px;}
+  .compassBar button{background:rgba(255,255,255,0.06); border:1px solid var(--line); color:var(--dim);
+    font-size:0.8rem; padding:5px 10px; border-radius:14px; cursor:pointer; line-height:1;
+    -webkit-tap-highlight-color:transparent;}
+  .compassBar button:active{background:var(--panel);}
+  .compassBar button.on{color:var(--good); border-color:var(--good);}
   .infoPanel{flex:1 1 300px; min-width:280px; padding:14px 16px 28px; border-left:1px solid var(--line);}
   @media (max-width:700px){ .infoPanel{border-left:none; border-top:1px solid var(--line);} }
   .row{display:flex; justify-content:space-between; align-items:baseline; padding:6px 0; font-size:0.95rem;}
@@ -95,6 +102,11 @@
     <div class="mapPanel">
       <canvas id="skyCanvas" width="600" height="600"></canvas>
       <div class="stateBadge" id="stateBadge">--</div>
+      <div class="compassBar">
+        <button id="rotLeftBtn" title="Rotate view left">&#8634;</button>
+        <button id="compassToggleBtn" title="Follow your phone's compass heading">&#129517; Face: Off</button>
+        <button id="rotRightBtn" title="Rotate view right">&#8635;</button>
+      </div>
     </div>
 
     <div class="infoPanel">
@@ -596,12 +608,14 @@ function computeMilkyWay(now, lat, lon){
   return pts;
 }
 
-// alt/az -> {x,y} in a unit disc, radius 1, centered at 0,0. East at top, North at left.
+// alt/az -> {x,y} in a unit disc, radius 1, centered at 0,0. Whichever azimuth is
+// currently "facing" (state.view.az -- East by default, or a live compass heading
+// once enabled) is drawn at the top of the disc.
 function plotUnit(alt, az){
   if (alt < -0.5) return null;
   if (alt < 0) alt = 0;
   const r = (90.0 - alt) / 90.0;
-  const th = (az - 90.0) * RAD;
+  const th = (az - state.view.az) * RAD;
   return { x: r * Math.sin(th), y: -r * Math.cos(th) };
 }
 
@@ -620,6 +634,7 @@ const state = {
   mapObjects: [],             // tappable {x,y,r,name,desc} rebuilt every drawSky() call
   tides: { high: null, low: null },  // next predicted high/low tide (computed offline)
   ocean: { waterTempF: null, seasFt: null, windMph: null, windDirDeg: null, loaded: false }, // live ocean conditions (needs connection)
+  view: { az: 90, compassOn: false, nudge: 0 }, // az = azimuth currently drawn at the top of the sky map (90 = facing East, the default)
 };
 
 const el = (id) => document.getElementById(id);
@@ -656,6 +671,10 @@ function openLocationModal(){
   el("locModal").classList.add("open");
 }
 function closeLocationModal(){ el("locModal").classList.remove("open"); }
+
+el("rotLeftBtn").addEventListener("click", () => nudgeView(-15));
+el("rotRightBtn").addEventListener("click", () => nudgeView(15));
+el("compassToggleBtn").addEventListener("click", () => { if (state.view.compassOn) disableCompass(); else enableCompass(); });
 
 el("locBtn").addEventListener("click", openLocationModal);
 el("locClose").addEventListener("click", closeLocationModal);
@@ -932,16 +951,98 @@ function drawLabel(g, text, x, y, color, canvasW, fontPx){
 function drawCompass(g, cx, cy, r, fontPx){
   g.strokeStyle = "rgba(180,185,200,0.5)"; g.lineWidth = Math.max(1, r * 0.03);
   g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
+  // The red/gray arrow always points "up" (the top of the map, i.e. whichever
+  // direction is currently being faced) -- the N/E/S/W labels below rotate around
+  // it to say what that direction actually is, same as the sky map itself does.
   g.fillStyle = "#ff5a5a";
   g.beginPath(); g.moveTo(cx, cy - r*0.9); g.lineTo(cx - r*0.35, cy); g.lineTo(cx + r*0.35, cy); g.closePath(); g.fill();
   g.fillStyle = "rgba(180,185,200,0.6)";
   g.beginPath(); g.moveTo(cx, cy + r*0.9); g.lineTo(cx - r*0.35, cy); g.lineTo(cx + r*0.35, cy); g.closePath(); g.fill();
-  g.font = fontPx + "px -apple-system, sans-serif"; g.textAlign = "center";
-  g.fillStyle = "#ff5a5a"; g.fillText("E", cx, cy - r*1.6);
-  g.fillStyle = "rgba(180,185,200,0.8)";
-  g.fillText("W", cx, cy + r*1.75);
-  g.fillText("N", cx - r*1.7, cy + fontPx*0.35);
-  g.fillText("S", cx + r*1.7, cy + fontPx*0.35);
+  g.font = fontPx + "px -apple-system, sans-serif";
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  const labelR = r * 1.72;
+  for (const [label, dirAz] of [["N", 0], ["E", 90], ["S", 180], ["W", 270]]){
+    const th = (dirAz - state.view.az) * RAD;
+    g.fillStyle = (label === "E") ? "#ff5a5a" : "rgba(180,185,200,0.8)";
+    g.fillText(label, cx + labelR * Math.sin(th), cy - labelR * Math.cos(th));
+  }
+  g.textBaseline = "alphabetic"; // restore the canvas default for every draw call after this one
+}
+
+/* =====================================================================
+   LIVE COMPASS -- rotate the sky map to match the direction you're
+   physically facing, read from the phone's magnetometer/orientation
+   sensor. Entirely local to the device (no network needed), but it does
+   need the sensor itself, plus (on iOS) an explicit tap-triggered
+   permission grant, so it's opt-in via the "Face" button rather than on
+   by default. The two rotate buttons work either way: with the compass
+   off they directly spin the map; with it on they nudge/correct the
+   live heading (handy if the sensor reads a few degrees off).
+   ===================================================================== */
+const FL_MAGNETIC_DECLINATION = -6.5; // approx degrees (west) for FL's Atlantic coast, 2026 -- would need updating for other locations
+let compassGotFix = false;
+
+function nudgeView(deltaDeg){
+  if (state.view.compassOn) state.view.nudge = rev(state.view.nudge + deltaDeg);
+  else state.view.az = rev(state.view.az + deltaDeg);
+}
+
+function onDeviceOrientation(e){
+  const hadFix = compassGotFix;
+  // iOS Safari supplies this directly, already corrected to true north.
+  if (typeof e.webkitCompassHeading === "number" && !isNaN(e.webkitCompassHeading)){
+    compassGotFix = true;
+    state.view.az = rev(e.webkitCompassHeading + state.view.nudge);
+    if (!hadFix) renderCompassToggle(); // clear any earlier "no signal" note now that a fix arrived
+    return;
+  }
+  // Other browsers (mainly Android/Chrome): only trust an *absolute* reading --
+  // a plain relative 'deviceorientation' alpha drifts and isn't tied to north at
+  // all. alpha counts counter-clockwise from magnetic north, so flip it to a
+  // clockwise compass heading, then apply a fixed local declination estimate to
+  // approximate true north.
+  if (e.absolute === true && typeof e.alpha === "number" && !isNaN(e.alpha)){
+    compassGotFix = true;
+    const magneticHeading = rev(360 - e.alpha);
+    state.view.az = rev(magneticHeading + FL_MAGNETIC_DECLINATION + state.view.nudge);
+    if (!hadFix) renderCompassToggle();
+  }
+}
+
+async function enableCompass(){
+  if (typeof DeviceOrientationEvent === "undefined"){
+    alert("This browser doesn't support compass heading.");
+    return;
+  }
+  if (typeof DeviceOrientationEvent.requestPermission === "function"){
+    try {
+      const result = await DeviceOrientationEvent.requestPermission();
+      if (result !== "granted"){ alert("Compass permission was denied."); return; }
+    } catch (err){ alert("Couldn't get compass permission."); return; }
+  }
+  compassGotFix = false;
+  state.view.nudge = 0;
+  window.addEventListener("deviceorientationabsolute", onDeviceOrientation);
+  window.addEventListener("deviceorientation", onDeviceOrientation);
+  state.view.compassOn = true;
+  renderCompassToggle();
+  setTimeout(() => {
+    if (state.view.compassOn && !compassGotFix) renderCompassToggle("no signal");
+  }, 3000);
+}
+
+function disableCompass(){
+  window.removeEventListener("deviceorientationabsolute", onDeviceOrientation);
+  window.removeEventListener("deviceorientation", onDeviceOrientation);
+  state.view.compassOn = false;
+  renderCompassToggle();
+}
+
+function renderCompassToggle(note){
+  const btn = el("compassToggleBtn");
+  btn.textContent = "\u{1F9ED} Face: " + (state.view.compassOn ? "On" + (note ? " (" + note + ")" : "") : "Off");
+  btn.classList.toggle("on", state.view.compassOn);
 }
 
 function drawSky(now){
