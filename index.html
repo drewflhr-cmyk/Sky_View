@@ -114,10 +114,12 @@
       <div class="meteorRow" id="meteorShower">--</div>
 
       <div class="divider"></div>
-      <div class="sectionTitle">Tides (Stuart, FL)</div>
+      <div class="sectionTitle">Ocean Conditions</div>
       <div class="row"><span class="label">Next High Tide</span><span class="val" id="tideHighVal">--</span></div>
       <div class="row"><span class="label">Next Low Tide</span><span class="val" id="tideLowVal">--</span></div>
-      <div class="noteSmall">Predicted offline (no connection needed) from NOAA's published harmonic data &middot; usually within ~15 min of NOAA's own Stuart table</div>
+      <div class="row"><span class="label">Water Temp</span><span class="val" id="oceanTempVal">--</span></div>
+      <div class="row"><span class="label">Seas</span><span class="val" id="oceanSeasVal">--</span></div>
+      <div class="row"><span class="label">Wind</span><span class="val" id="oceanWindVal">--</span></div>
 
       <div class="divider"></div>
       <div class="sectionTitle">Next 2 Florida Launches</div>
@@ -378,6 +380,11 @@ const STARS = [
   {name:"Regulus",raH:10.1395,dec:11.967,mag:1.35,desc:"A fast-spinning multi-star system about 79 light-years away, marking the heart of Leo, the lion. Its main star spins so quickly — once every 16 hours — that it's squashed into a flattened, egg-like shape, and it has at least three fainter companion stars orbiting it. Its name means 'little king' in Latin."},
   {name:"Castor",raH:7.5767,dec:31.888,mag:1.58,desc:"Actually six stars in one system, about 51 light-years away — the other twin of Gemini (with Pollux). What looks like a single point is really three pairs of stars, each pair orbiting closely, all three pairs orbiting a common center of mass — one of the more complex multi-star systems visible to the naked eye."},
   {name:"Polaris",raH:2.5303,dec:89.264,mag:1.98,desc:"The North Star — it sits almost exactly above Earth's north pole, so as Earth rotates, the whole sky appears to wheel around it while it barely moves, making it invaluable for navigation for centuries. It's actually a triple-star system and a type of pulsating star (a Cepheid variable) that subtly changes brightness. Due to Earth's slow 26,000-year wobble (precession), it won't always be the pole star — around 3000 BC, that role belonged to a different star."},
+  {name:"Alpha Centauri",raH:14.6600,dec:-60.8339,mag:-0.27,desc:"The closest star system to our own Sun, only about 4.4 light-years away — a close pair of Sun-like stars orbiting each other, plus a faint, even closer red dwarf companion, Proxima Centauri, which hosts a small rocky planet in its habitable zone. From Florida's latitude it only barely clears the southern horizon, best seen low in the sky on clear spring nights. It's the third-brightest star in the sky, but far too far south for most of the US to ever see it."},
+  {name:"Hadar",raH:14.0633,dec:-60.3730,mag:0.61,desc:"Also called Agena, a blue-white giant system around 390 light-years away, marking one of the 'feet' of Centaurus, the Centaur, right alongside Alpha Centauri. It's actually two massive, hot stars orbiting closely together, radiating tens of thousands of times the Sun's light. Like its neighbor Alpha Centauri, it skims the southern horizon from Florida and is invisible from most of the northern US."},
+  {name:"Acrux",raH:12.4433,dec:-63.0991,mag:0.77,desc:"The brightest star of Crux, the Southern Cross, and actually a multiple-star system of hot blue-white stars about 320 light-years away. It never rises for most of the northern hemisphere, but from south Florida's latitude it can just peek above the southern horizon on clear nights — a treat normally reserved for travelers south of the equator. Sailors have used the Southern Cross to find south much like Polaris marks north."},
+  {name:"Mimosa",raH:12.7950,dec:-59.6888,mag:1.25,desc:"Also known as Beta Crucis, the second-brightest star of the Southern Cross — a blue-white giant about 280 light-years away that pulses slightly in brightness as it flexes (a 'Beta Cephei' type variable). Paired with Acrux, it forms the long axis of the cross shape. Like the rest of Crux, it sits low in Florida's southern sky and is unreachable from most of the continental US."},
+  {name:"Mirfak",raH:3.4050,dec:49.8612,mag:1.79,desc:"The brightest star in Perseus, a yellow-white supergiant about 510 light-years away, sitting amid a loose scattering of fainter stars sometimes called the 'Alpha Persei Cluster.' Perseus, in Greek myth, is the hero who beheaded Medusa and later rescued Andromeda — both constellations lie nearby in the sky. It rides high overhead on autumn and winter evenings."},
 ];
 
 // A handful of easy-to-recognize constellations (J2000 RA/Dec), each as a small
@@ -416,6 +423,42 @@ const CONSTELLATIONS = [
       { raH: 17.5601, dec: -37.1038 }, // 3 Shaula
       { raH: 17.5128, dec: -37.2958 }, // 4 Lesath
     ], lines: [[1,0],[0,2],[2,3],[3,4]] },
+  { name: "Leo", anchor: 0, desc: "The Lion — a zodiac constellation whose brightest star, Regulus, marks the lion's heart, with a curving line of stars forming his mane and head (the 'Sickle') and a triangle of stars to the east tracing his hindquarters and tail. It's one of the few constellations that actually looks like what it's named for. Best seen on spring evenings, and the radiant point for the Leonid meteor shower every November.", stars: [
+      { raH: 10.1395, dec: 11.967 },  // 0 Regulus
+      { raH: 10.3328, dec: 19.8415 }, // 1 Algieba
+      { raH: 11.2353, dec: 20.5237 }, // 2 Zosma
+      { raH: 11.2373, dec: 15.4297 }, // 3 Chertan
+      { raH: 11.8177, dec: 14.572 },  // 4 Denebola
+    ], lines: [[0,1],[1,2],[2,3],[3,4],[3,0]] },
+  { name: "Cygnus", anchor: 0, desc: "The Swan, also known as the Northern Cross for the simple cross shape its brightest stars trace across the summer Milky Way. Deneb, at the swan's tail, is one of the most intrinsically luminous stars known, while Albireo, at its head, is a famous telescope target — a close double star showing a striking gold-and-blue color contrast. It flies high overhead on summer and early autumn nights.", stars: [
+      { raH: 20.6905, dec: 45.280 },  // 0 Deneb
+      { raH: 20.3704, dec: 40.2566 }, // 1 Sadr
+      { raH: 19.5120, dec: 27.9597 }, // 2 Albireo
+      { raH: 20.7705, dec: 33.9703 }, // 3 Gienah
+      { raH: 19.7496, dec: 45.1309 }, // 4 Delta Cygni
+    ], lines: [[0,1],[1,2],[1,3],[1,4]] },
+  { name: "Gemini", anchor: 0, desc: "The Twins, named for Castor and Pollux, the two bright stars marking their heads, with fainter chains of stars trailing down to form their bodies side by side. In Greek myth they were inseparable half-brothers placed in the sky together after one died, so Zeus could let them share immortality. A zodiac constellation, prominent on winter evenings and the source of the December Geminid meteor shower.", stars: [
+      { raH: 7.5767, dec: 31.888 },   // 0 Castor
+      { raH: 7.7553, dec: 28.026 },   // 1 Pollux
+      { raH: 6.7324, dec: 25.1311 },  // 2 Mebsuta
+      { raH: 7.3351, dec: 21.9823 },  // 3 Wasat
+      { raH: 6.3828, dec: 22.5133 },  // 4 Tejat
+      { raH: 6.6285, dec: 16.3993 },  // 5 Alhena
+    ], lines: [[0,2],[2,4],[4,5],[1,3],[3,2]] },
+  { name: "Ursa Minor", anchor: 0, desc: "The Little Bear — a dimmer echo of the Big Dipper, with Polaris anchoring the end of its handle and barely moving as the rest of the sky wheels around it. Its bowl stars, Kochab and Pherkad, are bright enough to be useful 'guardians of the pole' even where city lights wash out the fainter handle stars. Because it sits so close to the celestial pole, it's visible every clear night from mid-northern latitudes, never rising or setting.", stars: [
+      { raH: 2.5303, dec: 89.264 },   // 0 Polaris
+      { raH: 17.5365, dec: 86.5864 }, // 1 Yildun
+      { raH: 16.7656, dec: 82.0373 }, // 2 Epsilon UMi
+      { raH: 15.7341, dec: 77.794 },  // 3 Zeta UMi
+      { raH: 14.8451, dec: 74.1555 }, // 4 Kochab
+      { raH: 15.3454, dec: 71.8340 }, // 5 Pherkad
+    ], lines: [[0,1],[1,2],[2,3],[3,4],[4,5]] },
+  { name: "Crux", anchor: 0, desc: "The Southern Cross — a small, compact constellation marking a cross shape with its four brightest stars, famous enough to appear on the flags of several southern-hemisphere nations. It's too far south for most of the US to ever see, but from south Florida's latitude it can just scrape above the southern horizon on clear, dark nights, alongside its neighbors Alpha and Beta Centauri. Sailors in the southern hemisphere use it the way northern sailors use Polaris — to find true south.", stars: [
+      { raH: 12.4433, dec: -63.0991 }, // 0 Acrux
+      { raH: 12.7950, dec: -59.6888 }, // 1 Mimosa
+      { raH: 12.5194, dec: -57.1133 }, // 2 Gacrux
+      { raH: 12.2522, dec: -58.7489 }, // 3 Delta Crucis
+    ], lines: [[0,2],[1,3]] },
 ];
 
 // Major annual meteor showers (Northern Hemisphere), with typical active window
@@ -576,6 +619,7 @@ const state = {
   outlook: { text: null, loaded: false, loading: false, open: false },
   mapObjects: [],             // tappable {x,y,r,name,desc} rebuilt every drawSky() call
   tides: { high: null, low: null },  // next predicted high/low tide (computed offline)
+  ocean: { waterTempF: null, seasFt: null, windMph: null, windDirDeg: null, loaded: false }, // live ocean conditions (needs connection)
 };
 
 const el = (id) => document.getElementById(id);
@@ -787,6 +831,44 @@ function renderSolar(){
 
   const xEl = el("xrayVal");
   xEl.textContent = s.xrayClass || (s.loaded ? "unavailable" : "loading…");
+}
+
+/* Ocean Conditions — live sea-surface temp / wave height / wind for the
+   nearshore Atlantic water off Stuart/Jensen Beach, FL (27.19N, -80.15W).
+   Needs a connection (unlike the offline tide prediction above), so every
+   field falls back to "unavailable" rather than breaking anything else. */
+const OCEAN_LAT = 27.19, OCEAN_LON = -80.15;
+function degToCompass(deg){
+  const dirs = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+  return dirs[Math.round(deg / 22.5) % 16];
+}
+async function fetchOcean(){
+  const results = await Promise.allSettled([
+    fetch("https://marine-api.open-meteo.com/v1/marine?latitude=" + OCEAN_LAT + "&longitude=" + OCEAN_LON +
+      "&current=wave_height,sea_surface_temperature", { cache: "no-store" }).then((r) => r.json()),
+    fetch("https://api.open-meteo.com/v1/forecast?latitude=" + OCEAN_LAT + "&longitude=" + OCEAN_LON +
+      "&current=wind_speed_10m,wind_direction_10m&wind_speed_unit=mph", { cache: "no-store" }).then((r) => r.json()),
+  ]);
+  const [marineR, windR] = results;
+  if (marineR.status === "fulfilled" && marineR.value && marineR.value.current){
+    const c = marineR.value.current;
+    if (typeof c.sea_surface_temperature === "number") state.ocean.waterTempF = c.sea_surface_temperature * 9/5 + 32;
+    if (typeof c.wave_height === "number") state.ocean.seasFt = c.wave_height * 3.28084;
+  }
+  if (windR.status === "fulfilled" && windR.value && windR.value.current){
+    const c = windR.value.current;
+    if (typeof c.wind_speed_10m === "number") state.ocean.windMph = c.wind_speed_10m;
+    if (typeof c.wind_direction_10m === "number") state.ocean.windDirDeg = c.wind_direction_10m;
+  }
+  state.ocean.loaded = true;
+  renderOcean();
+}
+function renderOcean(){
+  const o = state.ocean;
+  el("oceanTempVal").textContent = (o.waterTempF != null) ? o.waterTempF.toFixed(0) + "°F" : (o.loaded ? "unavailable" : "loading…");
+  el("oceanSeasVal").textContent = (o.seasFt != null) ? o.seasFt.toFixed(1) + " ft" : (o.loaded ? "unavailable" : "loading…");
+  if (o.windMph != null && o.windDirDeg != null) el("oceanWindVal").textContent = Math.round(o.windMph) + " mph " + degToCompass(o.windDirDeg);
+  else el("oceanWindVal").textContent = o.loaded ? "unavailable" : "loading…";
 }
 
 async function toggleOutlook(){
@@ -1274,9 +1356,11 @@ function boot(){
   fetchISS();
   fetchLaunch();
   fetchSolar();
+  fetchOcean();
   setInterval(fetchISS, 15000);
   setInterval(fetchLaunch, 60 * 60 * 1000);
   setInterval(fetchSolar, 10 * 60 * 1000);
+  setInterval(fetchOcean, 15 * 60 * 1000);
 
   setInterval(tick, 1000);
   tick();
