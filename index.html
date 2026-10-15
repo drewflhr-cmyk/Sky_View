@@ -1,1718 +1,1331 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Sky View</title>
-<meta name="description" content="Live sky map, sun/moon/rise-set times, and next Space Coast rocket launch, calculated for wherever you are.">
-<style>
-  :root{
-    --bg:#05070d; --panel:#0a0e18; --line:#232a3d; --text:#e8ecf7; --dim:#8b93ab;
-    --dimmer:#565f78; --accent:#ffb454; --sun:#ffd23f; --moon:#e8e6dc; --good:#3ddc84;
-    --warn:#ffb454; --bad:#5a6178;
-  }
-  *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    -webkit-tap-highlight-color:transparent; overscroll-behavior:none;}
-  #app{min-height:100vh; display:flex; flex-direction:column;}
-  header{display:flex; align-items:center; justify-content:space-between; gap:8px;
-    padding:10px 14px; border-bottom:1px solid var(--line); flex-wrap:wrap;}
-  header .time{font-size:1.15rem; font-weight:600; letter-spacing:0.02em;}
-  header .date{color:var(--dim); font-size:0.85rem; margin-left:8px;}
-  header .locBtn{background:none; border:1px solid var(--line); color:var(--dim);
-    font-size:0.78rem; padding:6px 10px; border-radius:20px; cursor:pointer;}
-  header .locBtn:active{background:var(--panel);}
-  .layout{display:flex; flex:1; flex-wrap:wrap;}
-  .mapPanel{position:relative; flex:1 1 320px; min-width:280px; display:flex;
-    align-items:flex-start; justify-content:center; padding:10px;
-    align-self:flex-start;} /* without this, .layout's default row-stretch makes mapPanel as tall as the (much taller) infoPanel on wide screens, pushing the absolutely-positioned compass bar far below the actual map */
-  .mapPanel canvas{width:100%; max-width:420px; aspect-ratio:1/1; display:block;}
-  .stateBadge{position:absolute; top:16px; right:16px; font-size:0.75rem; padding:3px 9px;
-    border-radius:10px; background:rgba(255,255,255,0.06); color:var(--dim);}
-  .compassBar{position:absolute; bottom:10px; left:50%; transform:translateX(-50%);
-    display:flex; align-items:center; gap:6px;}
-  .compassBar button{background:rgba(255,255,255,0.06); border:1px solid var(--line); color:var(--dim);
-    font-size:0.8rem; padding:5px 10px; border-radius:14px; cursor:pointer; line-height:1;
-    -webkit-tap-highlight-color:transparent;}
-  .compassBar button:active{background:var(--panel);}
-  .compassBar button.on{color:var(--good); border-color:var(--good);}
-  .infoPanel{flex:1 1 300px; min-width:280px; padding:14px 16px 28px; border-left:1px solid var(--line);}
-  @media (max-width:700px){ .infoPanel{border-left:none; border-top:1px solid var(--line);} }
-  .bottomPanel{max-width:480px; margin:0 auto; padding:14px 16px 28px; border-top:1px solid var(--line);}
-  .row{display:flex; justify-content:space-between; align-items:baseline; padding:6px 0; font-size:0.95rem;}
-  .row .label{color:var(--dim);}
-  .row .val{font-weight:600;}
-  .divider{height:1px; background:var(--line); margin:10px 0;}
-  .phaseBlock{display:flex; align-items:center; gap:12px; padding:8px 0;}
-  .phaseBlock canvas{flex:none;}
-  .phaseText .name{font-weight:600;}
-  .phaseText .pct{color:var(--dim); font-size:0.85rem;}
-  .sectionTitle{color:var(--accent); font-size:0.8rem; letter-spacing:0.06em;
-    text-transform:uppercase; font-weight:700; margin:14px 0 8px;}
-  .launchBox{border:1px solid var(--line); border-radius:12px; padding:12px 14px; cursor:pointer;
-    background:rgba(255,255,255,0.02);}
-  .launchBox:active{background:rgba(255,255,255,0.05);}
-  .launchTop{display:flex; justify-content:space-between; align-items:flex-start; gap:8px;}
-  .launchMission{font-weight:600; font-size:1.02rem; line-height:1.3;}
-  .launchStatus{font-size:0.72rem; font-weight:700; padding:2px 8px; border-radius:8px; white-space:nowrap;}
-  .launchWhen{color:#7fc7ff; font-size:0.9rem; margin-top:6px;}
-  .launchMeta{color:var(--dim); font-size:0.82rem; margin-top:2px;}
-  .launchDesc{color:#b7bccb; font-size:0.85rem; margin-top:8px; line-height:1.4;
-    display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;}
-  .tapHint{color:var(--accent); font-size:0.78rem; margin-top:6px;}
-  .placeholder{color:var(--dimmer); font-size:0.88rem; padding:6px 0;}
-  .noteSmall{color:var(--dimmer); font-size:0.72rem; line-height:1.35; margin-top:2px;}
-  .outlookLink{color:#7fc7ff; font-size:0.85rem; margin-top:14px; cursor:pointer; display:inline-block;}
-  .outlookBox{margin-top:8px; padding:10px 12px; border:1px solid var(--line); border-radius:10px;
-    background:rgba(255,255,255,0.02); font-size:0.72rem; line-height:1.5; white-space:pre-wrap;
-    max-height:280px; overflow:auto; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; color:#c7cbe0;}
-  .meteorRow{font-size:0.95rem; padding:6px 0 10px; color:var(--dim); line-height:1.4;}
-  .meteorRow .name{color:var(--text); font-weight:600;}
-  .meteorRow .name.clickable{cursor:pointer; text-decoration:underline; text-decoration-style:dotted; text-decoration-color:var(--dimmer);}
-  .meteorRow .name.clickable:active{color:var(--accent);}
-  .modal{position:fixed; inset:0; background:rgba(0,0,0,0.6); display:none;
-    align-items:center; justify-content:center; padding:16px; z-index:20;}
-  .modal.open{display:flex;}
-  .modalCard{background:var(--panel); border:1px solid var(--line); border-radius:16px;
-    max-width:480px; width:100%; max-height:88vh; overflow:auto; padding:20px;}
-  .modalCard h2{margin:0 0 4px; font-size:1.2rem;}
-  .modalCard .closeRow{display:flex; justify-content:flex-end;}
-  .modalCard .closeRow button{background:none; border:none; color:var(--dim); font-size:0.85rem;
-    padding:6px; cursor:pointer;}
-  .field{margin:10px 0;}
-  .field label{display:block; font-size:0.8rem; color:var(--dim); margin-bottom:4px;}
-  .field input{width:100%; padding:8px 10px; border-radius:8px; border:1px solid var(--line);
-    background:#0d1220; color:var(--text); font-size:0.95rem;}
-  .btnRow{display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;}
-  .btn{flex:1; padding:10px; border-radius:10px; border:1px solid var(--line); background:#141a2c;
-    color:var(--text); font-size:0.9rem; cursor:pointer;}
-  .btn.primary{background:var(--accent); color:#1a1200; border-color:var(--accent); font-weight:700;}
-  footer{text-align:center; color:var(--dimmer); font-size:0.72rem; padding:10px 14px 18px;}
-  a{color:#7fc7ff;}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Local Aviation Radar</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(180deg, #1e3c72 0%, #4a90e2 25%, #87ceeb 50%, #e0f6ff 75%, #f0f8ff 100%);
+            background-attachment: fixed;
+            padding: 1rem;
+            color: #333;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            font-size: 28px;
+            margin-bottom: 0.5rem;
+            color: #1a1a1a;
+        }
+
+        /* Title line: title on the left, clock (local + UTC) on the right, same font size */
+        .title-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            flex-wrap: wrap;
+            column-gap: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .title-row h1 {
+            margin-bottom: 0;
+        }
+
+        .clock {
+            font-size: 28px;
+            font-weight: 600;
+            color: #1a1a1a;
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Weather row: wind (left) | Flight Tracking button (center) | temp + dew point (right) */
+        .track-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            margin: 0.1rem 0;
+        }
+
+        .track-center {
+            flex: 1;
+            text-align: center;
+            min-width: 0;
+        }
+
+        .wx {
+            flex: 0 0 auto;
+            width: 120px;
+            font-size: 14px;
+            font-weight: 600;
+            line-height: 1.5;
+            color: #1a1a1a;
+            white-space: nowrap;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .wx.wx-left { text-align: left; }
+        .wx.wx-right { text-align: right; }
+
+        /* Reference arrows sitting on top of the map */
+        .map-arrow {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.8);
+            box-shadow: 0 0 3px rgba(0,0,0,0.5);
+            z-index: 500;
+            pointer-events: none;
+        }
+
+        .map-arrow svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+            transition: transform 0.4s;
+        }
+
+        #northArrow { top: 44px; right: 12px; }      /* just under the "Radar: Live" box */
+        #windArrow  { bottom: 28px; right: 12px; }   /* bottom right, above the map credit line */
+
+        .airway-label {
+            background: rgba(0,0,0,0.55);
+            border: none;
+            color: #d0d0d0;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 1px 4px;
+            box-shadow: none;
+        }
+
+        .airway-label::before { display: none; }
+
+        .location-input {
+            margin-bottom: 1.5rem;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .location-input input {
+            padding: 6px 8px;
+            font-size: 12px;
+            margin: 0 4px;
+            width: 140px;
+        }
+
+        .location-input button {
+            padding: 6px 12px;
+            font-size: 12px;
+            background: #0066cc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .location-input button:hover {
+            background: #0052a3;
+        }
+
+        .radar-section {
+            display: grid;
+            grid-template-columns: 1fr 280px;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .radar-container {
+            position: relative;
+            aspect-ratio: 1;
+            background: #000;
+            border-radius: 12px;
+            border: 1px solid #e0e0e0;
+            overflow: hidden;
+        }
+
+        #mapContainer {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            z-index: 1;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+            z-index: 400;
+            pointer-events: none;
+        }
+
+        .radar-status {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            font-size: 11px;
+            background: rgba(0,0,0,0.6);
+            color: #fff;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-weight: 500;
+            z-index: 101;
+            max-width: 140px;
+        }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .panel {
+            background: #f9f9f9;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .panel-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #666;
+            margin-bottom: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .scroll-hint {
+            font-size: 11px;
+            font-weight: 400;
+            text-transform: none;
+            letter-spacing: 0;
+            color: #999;
+        }
+
+        #aircraftList, #airportList {
+            font-size: 12px;
+            max-height: 360px;
+            overflow-y: auto;
+        }
+
+        .aircraft-item, .airport-item {
+            padding: 8px 0;
+            border-bottom: 1px solid #e8e8e8;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .aircraft-item:hover, .airport-item:hover {
+            background: #f0f0f0;
+        }
+
+        .aircraft-item.tracked {
+            background: #ffebee;
+            border-left: 3px solid #d32f2f;
+            padding-left: 5px;
+        }
+
+        .aircraft-item.tracked strong {
+            color: #d32f2f;
+        }
+
+        .aircraft-item strong, .airport-item strong {
+            display: block;
+            color: #1a1a1a;
+            margin-bottom: 2px;
+        }
+
+        .aircraft-item .detail {
+            font-size: 11px;
+            color: #888;
+        }
+
+        .airport-item {
+            color: #1a1a1a;
+        }
+
+        .airport-item .distance {
+            font-size: 11px;
+            color: #888;
+        }
+
+        .ksua-live-atc-link {
+            display: block;
+            margin-top: 1rem;
+            padding: 10px;
+            background: #00a3cc;
+            color: white;
+            text-align: center;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: background 0.2s;
+            text-decoration: none;
+            border: none;
+            font-family: inherit;
+        }
+
+        .ksua-live-atc-link:hover {
+            background: #0084a3;
+        }
+
+        .ksua-weather-link {
+            display: block;
+            margin-top: 0.5rem;
+            padding: 10px;
+            background: #0066cc;
+            color: white;
+            text-align: center;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: background 0.2s;
+            text-decoration: none;
+            border: none;
+            font-family: inherit;
+        }
+
+        .ksua-weather-link:hover {
+            background: #0052a3;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: flex-start;
+            justify-content: flex-start;
+            padding: 2rem;
+            overflow-y: auto;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 12px 48px rgba(0,0,0,0.3);
+        }
+
+        .modal-content h3 {
+            margin: 0 0 1.5rem 0;
+            font-size: 18px;
+            color: #1a1a1a;
+        }
+
+        .modal-content table {
+            width: 100%;
+            font-size: 13px;
+            border-collapse: collapse;
+        }
+
+        .modal-content td {
+            padding: 10px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .modal-content td:first-child {
+            color: #888;
+            width: 50%;
+        }
+
+        .modal-content td:last-child {
+            text-align: right;
+            color: #1a1a1a;
+            font-weight: 500;
+        }
+
+        #diagramLinks {
+            margin: 1.5rem 0;
+            padding: 1rem;
+            background: #f5f5f5;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        #diagramLinks a {
+            display: inline-block;
+            margin: 4px 4px;
+            padding: 8px 12px;
+            background: #0066cc;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 12px;
+            transition: background 0.2s;
+        }
+
+        #diagramLinks a:hover {
+            background: #0052a3;
+        }
+
+        .modal-close {
+            width: 100%;
+            margin-top: 1.5rem;
+            padding: 10px;
+            background: #f0f0f0;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #1a1a1a;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+
+        .modal-close:hover {
+            background: #e0e0e0;
+        }
+
+        .error-text {
+            color: #d32f2f;
+            font-size: 11px;
+        }
+
+        .info-text {
+            color: #0066cc;
+            font-size: 11px;
+            margin-top: 0.5rem;
+        }
+
+        @media (max-width: 1200px) {
+            .radar-section {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 1rem;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 1rem;
+            }
+
+            h1 {
+                font-size: 22px;
+            }
+
+            .clock {
+                font-size: 22px;
+            }
+
+            .wx {
+                width: 90px;
+                font-size: 12px;
+            }
+
+            .sidebar {
+                grid-template-columns: 1fr;
+            }
+
+            .modal-content {
+                margin: 1rem;
+                max-width: none;
+            }
+        }
+    </style>
 </head>
 <body>
-<div id="app">
-  <header>
-    <div>
-      <span class="time" id="clock">--:--</span>
-      <span class="date" id="dateLabel"></span>
-    </div>
-    <button class="locBtn" id="locBtn">Location: locating…</button>
-  </header>
-
-  <div class="layout">
-    <div class="mapPanel">
-      <canvas id="skyCanvas" width="600" height="600"></canvas>
-      <div class="stateBadge" id="stateBadge">--</div>
-      <div class="compassBar">
-        <button id="rotLeftBtn" title="Rotate view left">&#8634;</button>
-        <button id="compassToggleBtn" title="Follow your phone's compass heading">&#129517; Face: Off</button>
-        <button id="rotRightBtn" title="Rotate view right">&#8635;</button>
-      </div>
-    </div>
-
-    <div class="infoPanel">
-      <div class="row"><span class="label">Sunrise</span><span class="val" id="sunRise" style="color:var(--sun)">--</span></div>
-      <div class="row"><span class="label">Sunset</span><span class="val" id="sunSet" style="color:var(--sun)">--</span></div>
-      <div class="row"><span class="label">Moonrise</span><span class="val" id="moonRise" style="color:var(--moon)">--</span></div>
-      <div class="row"><span class="label">Moonset</span><span class="val" id="moonSet" style="color:var(--moon)">--</span></div>
-      <div class="row"><span class="label">Next Full Moon</span><span class="val" id="fullMoon" style="color:var(--moon)">--</span></div>
-
-      <div class="phaseBlock">
-        <canvas id="phaseCanvas" width="64" height="64" style="width:40px;height:40px;"></canvas>
-        <div class="phaseText">
-          <div class="name" id="phaseName">--</div>
-          <div class="pct" id="phasePct">--</div>
+    <div class="container">
+        <div class="title-row">
+            <h1>Local Aviation Radar</h1>
+            <div class="clock" id="clock" title="Local time (UTC time)">--:-- (--:--Z)</div>
         </div>
-      </div>
-      <div class="meteorRow" id="nextPlanetRise">--</div>
-      <div class="meteorRow" id="meteorShower">--</div>
 
-      <div class="divider"></div>
-      <div class="sectionTitle">Ocean Conditions (Jensen Beach, FL)</div>
-      <div class="row"><span class="label">Next High Tide</span><span class="val" id="tideHighVal">--</span></div>
-      <div class="row"><span class="label">Next Low Tide</span><span class="val" id="tideLowVal">--</span></div>
-      <div class="row"><span class="label">Water Temp</span><span class="val" id="oceanTempVal">--</span></div>
-      <div class="row"><span class="label">Seas</span><span class="val" id="oceanSeasVal">--</span></div>
-      <div class="row"><span class="label">Wind</span><span class="val" id="oceanWindVal">--</span></div>
-      <a class="outlookLink" style="margin-top:8px; text-decoration:none;" href="https://video-monitoring.com/beachcams/jensen/" target="_blank" rel="noopener">Jensen Beach Webcam</a>
+        <div id="sigmetPanel" style="margin-bottom: 1rem; padding: 0.75rem; background: #fff; border-radius: 8px; border: 1px solid #e0e0e0; font-size: 12px; color: #666; overflow: hidden;">
+            <div id="sigmetDisplay" style="white-space: nowrap; overflow-x: auto; font-size: 12px;">SIGMETs: loading...</div>
+        </div>
 
-      <div class="divider"></div>
-      <div class="sectionTitle">Next 2 Florida Launches</div>
-      <div class="launchBox" id="launchBox0" style="margin-bottom:10px">
-        <div class="placeholder">Loading…</div>
-      </div>
-      <div class="launchBox" id="launchBox1">
-        <div class="placeholder">Loading…</div>
-      </div>
+        <div class="track-row">
+            <div class="wx wx-left" title="KSUA wind (METAR)">
+                <div id="wxSpeed">Wind --</div>
+                <div id="wxDir">Dir --</div>
+            </div>
+            <div class="track-center">
+            <a href="https://www.flightaware.com" target="_blank" style="display: inline-block; padding: 12px 20px; background: #ff6600; color: white; text-decoration: none; border-radius: 6px; font-weight: 500; font-size: 13px; transition: background 0.2s;" onmouseover="this.style.background='#e65a00'" onmouseout="this.style.background='#ff6600'">Flight Tracking and Information</a>
+            </div>
+            <div class="wx wx-right" title="KSUA temperature and dew point (METAR)">
+                <div id="wxTemp">Temp --</div>
+                <div id="wxDew">Dew pt --</div>
+            </div>
+        </div>
 
-      <div class="divider"></div>
-      <div class="sectionTitle">Solar Activity</div>
-      <div class="row"><span class="label">G-Scale (geomagnetic storm level)</span><span class="val" id="gscaleVal">--</span></div>
-      <div class="noteSmall" id="gscaleNote">G1 Minor &middot; G2 Moderate &middot; G3 Strong &middot; G4 Severe &middot; G5 Extreme</div>
-      <div class="row" style="margin-top:8px"><span class="label">Solar Flare Activity (GOES X-Ray Scale)</span><span class="val" id="xrayVal">--</span></div>
-      <div class="noteSmall" id="xrayNote">A &lt; B &lt; C &lt; M &lt; X, each class ~10&times; stronger &middot; M and X flares can affect radio/GPS</div>
-      <div class="outlookLink" id="outlookToggle">NOAA Space Weather Advisory Outlook &#9662;</div>
-      <div class="outlookBox" id="outlookBox" style="display:none"></div>
+        <div class="radar-section">
+            <div class="radar-container">
+                <div id="mapContainer"></div>
+                <canvas id="radarCanvas"></canvas>
+                <div class="radar-status" id="radarStatus">Loading…</div>
+                <!-- Fixed arrow: always points 30 degrees clockwise from north -->
+                <div class="map-arrow" id="northArrow" title="Fixed reference arrow, 30° from north">
+                    <svg viewBox="0 0 40 40" style="transform: rotate(30deg)"><g fill="#000" stroke="#000" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="20" y1="32" x2="20" y2="12"/><polygon points="20,5 12,18 28,18"/></g></svg>
+                </div>
+                <!-- Live wind arrow (KSUA): points the way the wind is blowing toward -->
+                <div class="map-arrow" id="windArrow" title="Wind" style="display:none">
+                    <svg viewBox="0 0 40 40" id="windArrowSvg"><g fill="#0066cc" stroke="#0066cc" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="20" y1="32" x2="20" y2="12"/><polygon points="20,5 12,18 28,18"/></g></svg>
+                </div>
+            </div>
+
+            <div class="sidebar">
+                <div class="panel">
+                    <div class="panel-title">
+                        <span>Aircraft Nearby</span>
+                        <span class="scroll-hint">(Scroll for more)</span>
+                    </div>
+                    <div id="aircraftList">
+                        <p style="color: #999; margin: 0;">Loading…</p>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <div class="panel-title">
+                        <span>Airports</span>
+                        <span class="scroll-hint">(Scroll for more)</span>
+                    </div>
+                    <div id="airportList">
+                        <p style="color: #999; margin: 0;">Loading…</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="location-input" style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #ddd;">
+            <label>Your Location (Lat/Lon):</label>
+            <input type="text" id="latInput" placeholder="27.248805" value="27.248805">
+            <input type="text" id="lonInput" placeholder="-80.259035" value="-80.259035">
+            <button onclick="updateLocation()">Update</button>
+            <button onclick="getGeolocation()">Auto-detect</button>
+            <span class="info-text" id="locationStatus"></span>
+        </div>
     </div>
-  </div>
 
-  <footer>
-    Sun/Moon/planet/ISS positions calculated on this page. ISS position and launch schedule need an internet connection to update.
-  </footer>
-
-  <div class="bottomPanel">
-    <div class="sectionTitle">Small Point, ME Ocean Conditions</div>
-    <div class="row"><span class="label">Next High Tide</span><span class="val" id="tideHighValME">--</span></div>
-    <div class="row"><span class="label">Next Low Tide</span><span class="val" id="tideLowValME">--</span></div>
-    <div class="row"><span class="label">Water Temp</span><span class="val" id="oceanTempValME">--</span></div>
-    <div class="row"><span class="label">Air Temp</span><span class="val" id="airTempValME">--</span></div>
-    <div class="row"><span class="label">Seas</span><span class="val" id="oceanSeasValME">--</span></div>
-    <div class="row"><span class="label">Wind</span><span class="val" id="oceanWindValME">--</span></div>
-  </div>
-</div>
-
-<!-- Location override modal -->
-<div class="modal" id="locModal">
-  <div class="modalCard">
-    <div class="closeRow"><button id="locClose">Close</button></div>
-    <h2>Set your location</h2>
-    <p class="placeholder" style="margin-top:0">Use your device's GPS, or type coordinates for anywhere &mdash; a beach, a campsite, anywhere.</p>
-    <div class="btnRow">
-      <button class="btn primary" id="useGpsBtn">Use my GPS location</button>
+    <div class="modal" id="detailModal">
+        <div class="modal-content">
+            <h3 id="detailCallsign"></h3>
+            <table id="detailTable"></table>
+            <button class="modal-close" onclick="document.getElementById('detailModal').classList.remove('active')">Close</button>
+        </div>
     </div>
-    <div class="field">
-      <label>Latitude</label>
-      <input type="number" step="any" id="latInput" placeholder="e.g. 27.2488">
+
+    <div class="modal" id="airportModal">
+        <div class="modal-content">
+            <h3 id="airportName"></h3>
+            <table id="airportTable"></table>
+            <div id="diagramLinks"></div>
+            <button class="modal-close" onclick="document.getElementById('airportModal').classList.remove('active')">Close</button>
+        </div>
     </div>
-    <div class="field">
-      <label>Longitude</label>
-      <input type="number" step="any" id="lonInput" placeholder="e.g. -80.2590">
-    </div>
-    <div class="btnRow">
-      <button class="btn primary" id="setManualBtn">Use these coordinates</button>
-    </div>
-  </div>
-</div>
 
-<!-- Launch details modal -->
-<div class="modal" id="launchModal">
-  <div class="modalCard">
-    <div class="closeRow"><button id="launchClose">Close</button></div>
-    <h2 id="ldMission">--</h2>
-    <div class="launchMeta" id="ldWho">--</div>
-    <div class="launchWhen" id="ldWhen">--</div>
-    <div class="launchMeta" id="ldOrbit"></div>
-    <div class="divider"></div>
-    <div class="launchDesc" id="ldDesc" style="-webkit-line-clamp:unset; display:block;">--</div>
-  </div>
-</div>
 
-<!-- Sky-object info modal (tap any Sun/Moon/planet/star/constellation on the map) -->
-<div class="modal" id="objModal">
-  <div class="modalCard">
-    <div class="closeRow"><button id="objClose">Close</button></div>
-    <h2 id="objName">--</h2>
-    <div class="launchDesc" id="objDesc" style="-webkit-line-clamp:unset; display:block;">--</div>
-  </div>
-</div>
-
-<script>
-"use strict";
-
-/* =====================================================================
-   ASTRONOMY MATH  (ported from the ESP32 "Sky View" sketch, which uses
-   Paul Schlyter's low-precision formulas — accurate to a few arc-minutes)
-   ===================================================================== */
-const RAD = Math.PI / 180, DEG = 180 / Math.PI;
-function rev(x){ x = x % 360; return x < 0 ? x + 360 : x; }
-function sind(x){ return Math.sin(x * RAD); }
-function cosd(x){ return Math.cos(x * RAD); }
-function asind(x){ return Math.asin(x) * DEG; }
-function atan2d(y, x){ return Math.atan2(y, x) * DEG; }
-
-function dayNumber(t){ return (t - 946598400) / 86400; } // t = Unix seconds
-
-function localSiderealTime(t, lon){
-  const jd = t / 86400 + 2440587.5;
-  return rev(280.46061837 + 360.98564736629 * (jd - 2451545.0) + lon);
-}
-
-function solveKepler(M, e){
-  let E = M + e * DEG * sind(M) * (1 + e * cosd(M));
-  for (let k = 0; k < 10; k++){
-    const dE = (E - e * DEG * sind(E) - M) / (1 - e * cosd(E));
-    E -= dE;
-    if (Math.abs(dE) < 1e-6) break;
-  }
-  return E;
-}
-
-function orbitLonLatR(N, i, w, a, e, M){
-  const E = solveKepler(M, e);
-  const xv = a * (cosd(E) - e);
-  const yv = a * Math.sqrt(1 - e * e) * sind(E);
-  const v = atan2d(yv, xv);
-  const r = Math.sqrt(xv * xv + yv * yv);
-  const xh = r * (cosd(N) * cosd(v + w) - sind(N) * sind(v + w) * cosd(i));
-  const yh = r * (sind(N) * cosd(v + w) + cosd(N) * sind(v + w) * cosd(i));
-  const zh = r * (sind(v + w) * sind(i));
-  return { lon: rev(atan2d(yh, xh)), lat: atan2d(zh, Math.sqrt(xh * xh + yh * yh)), r };
-}
-
-function eclipticToEquatorial(lon, lat, ecl){
-  const xg = cosd(lon) * cosd(lat), yg = sind(lon) * cosd(lat), zg = sind(lat);
-  const ye = yg * cosd(ecl) - zg * sind(ecl);
-  const ze = yg * sind(ecl) + zg * cosd(ecl);
-  return { ra: rev(atan2d(ye, xg)), dec: atan2d(ze, Math.sqrt(xg * xg + ye * ye)) };
-}
-
-function equatorialToHorizon(ra, dec, lst, lat){
-  const ha = rev(lst - ra);
-  const x = cosd(ha) * cosd(dec), y = sind(ha) * cosd(dec), z = sind(dec);
-  const xhor = x * sind(lat) - z * cosd(lat);
-  const zhor = x * cosd(lat) + z * sind(lat);
-  return { az: rev(atan2d(y, xhor) + 180.0), alt: asind(zhor) };
-}
-
-function sunAt(d){
-  const ws = rev(282.9404 + 4.70935e-5 * d);
-  const e = 0.016709 - 1.151e-9 * d;
-  const Ms = rev(356.0470 + 0.9856002585 * d);
-  const ecl = 23.4393 - 3.563e-7 * d;
-  const E = solveKepler(Ms, e);
-  const xv = cosd(E) - e, yv = Math.sqrt(1 - e * e) * sind(E);
-  const v = atan2d(yv, xv);
-  const r = Math.sqrt(xv * xv + yv * yv);
-  const lon = rev(v + ws);
-  return { lon, xs: r * cosd(lon), ys: r * sind(lon), Ms, ws, ecl, r };
-}
-
-function sunAltAz(t, lat, lon){
-  const s = sunAt(dayNumber(t));
-  const { ra, dec } = eclipticToEquatorial(s.lon, 0, s.ecl);
-  return equatorialToHorizon(ra, dec, localSiderealTime(t, lon), lat);
-}
-
-function moonAt(t, lat, lon){
-  const d = dayNumber(t);
-  const s = sunAt(d);
-  const N = rev(125.1228 - 0.0529538083 * d);
-  const i = 5.1454;
-  const w = rev(318.0634 + 0.1643573223 * d);
-  const a = 60.2666, e = 0.054900;
-  const Mm = rev(115.3654 + 13.0649929509 * d);
-  let { lon: mlon, lat: mlat, r: mr } = orbitLonLatR(N, i, w, a, e, Mm);
-
-  const Ms = s.Ms;
-  const Ls = rev(s.Ms + s.ws);
-  const Lm = rev(Mm + w + N);
-  const D = rev(Lm - Ls);
-  const F = rev(Lm - N);
-
-  mlon += -1.274 * sind(Mm - 2*D) + 0.658 * sind(2*D) - 0.186 * sind(Ms)
-        - 0.059 * sind(2*Mm - 2*D) - 0.057 * sind(Mm - 2*D + Ms)
-        + 0.053 * sind(Mm + 2*D) + 0.046 * sind(2*D - Ms) + 0.041 * sind(Mm - Ms)
-        - 0.035 * sind(D) - 0.031 * sind(Mm + Ms) - 0.015 * sind(2*F - 2*D)
-        + 0.011 * sind(Mm - 4*D);
-  mlat += -0.173 * sind(F - 2*D) - 0.055 * sind(Mm - F - 2*D) - 0.046 * sind(Mm + F - 2*D)
-        + 0.033 * sind(F + 2*D) + 0.017 * sind(2*Mm + F);
-  mr += -0.58 * cosd(Mm - 2*D) - 0.46 * cosd(2*D);
-  mlon = rev(mlon);
-
-  const { ra, dec } = eclipticToEquatorial(mlon, mlat, s.ecl);
-  const h = equatorialToHorizon(ra, dec, localSiderealTime(t, lon), lat);
-  h.alt -= asind(1.0 / mr) * cosd(h.alt);
-  h.lon = mlon; h.lat = mlat; h.r = mr;
-  return h;
-}
-
-function moonPhaseAngle(t, lat, lon){
-  return rev(moonAt(t, lat, lon).lon - sunAt(dayNumber(t)).lon);
-}
-
-function phaseName(A){
-  if (A < 11.25 || A >= 348.75) return "New Moon";
-  if (A < 78.75)  return "Waxing Crescent";
-  if (A < 101.25) return "First Quarter";
-  if (A < 168.75) return "Waxing Gibbous";
-  if (A < 191.25) return "Full Moon";
-  if (A < 258.75) return "Waning Gibbous";
-  if (A < 281.25) return "Last Quarter";
-  return "Waning Crescent";
-}
-
-const PLANETS = [
-  { name:"Mercury", N0:48.3313, N1:3.24587e-5, i0:7.0047, i1:5.00e-8, w0:29.1241, w1:1.01444e-5, a:0.387098, e0:0.205635, e1:5.59e-10, M0:168.6562, M1:4.0923344368, color:"rgb(190,190,190)",
-    desc:"The smallest planet and closest to the Sun, only slightly bigger than our Moon. It has almost no atmosphere to trap heat, so its surface swings from about 800°F in daytime to -290°F at night — the largest temperature range of any planet. A year there (one orbit of the Sun) is just 88 Earth days, but a single day (sunrise to sunrise) lasts about 176 Earth days, because it spins so slowly relative to how fast it orbits. Its surface looks a lot like our Moon's — heavily cratered, with almost no weather to erode the impacts. Only two spacecraft have ever visited it (Mariner 10 and MESSENGER), because it's surprisingly hard to reach — a spacecraft has to shed a lot of speed to avoid just swinging past the Sun." },
-  { name:"Venus",   N0:76.6799, N1:2.46590e-5, i0:3.3946, i1:2.75e-8, w0:54.8910, w1:1.38374e-5, a:0.723330, e0:0.006773, e1:-1.302e-9, M0:48.0052, M1:1.6021302244, color:"rgb(255,255,215)",
-    desc:"The hottest planet in the solar system — hotter even than Mercury — because its thick carbon-dioxide atmosphere traps heat in a runaway greenhouse effect, with surface temperatures around 900°F (hot enough to melt lead) and pressure about 90 times Earth's, like being 3,000 feet underwater. It's shrouded in reflective sulfuric-acid clouds, which is why it's usually the brightest point of light in the sky besides the Sun and Moon — often called the 'morning star' or 'evening star.' It also spins backwards compared to most planets, and so slowly that one Venusian day is longer than its entire year. It's very similar in size to Earth and is sometimes called Earth's 'evil twin.'" },
-  { name:"Mars",    N0:49.5574, N1:2.11081e-5, i0:1.8497, i1:-1.78e-8, w0:286.5016, w1:2.92961e-5, a:1.523688, e0:0.093405, e1:2.516e-9, M0:18.6021, M1:0.5240207766, color:"rgb(255,100,60)",
-    desc:"The 'Red Planet' — colored by iron oxide (rust) covering its dusty surface. Home to Olympus Mons, the largest known volcano in the solar system (about 2.5x taller than Mount Everest, wide enough to cover a small US state), and Valles Marineris, a canyon system long enough to stretch across the continental US. Its day is remarkably close to Earth's — about 24 hours 37 minutes — and it has two small, oddly-shaped moons, Phobos and Deimos, likely captured asteroids. Several active rovers and orbiters are exploring it right now, searching for signs it once hosted liquid water; it's the most explored planet besides Earth and a leading candidate for future crewed missions." },
-  { name:"Jupiter", N0:100.4542, N1:2.76854e-5, i0:1.3030, i1:-1.557e-7, w0:273.8777, w1:1.64505e-5, a:5.20256, e0:0.048498, e1:4.469e-9, M0:19.8950, M1:0.0830853001, color:"rgb(245,210,160)",
-    desc:"The largest planet in the solar system — a gas giant more massive than every other planet combined, with a diameter about 11 times Earth's. Its Great Red Spot is a giant storm — wider than Earth — that's raged for at least 150 years, though it has been slowly shrinking. It has at least 95 known moons; even small binoculars can show its four largest (Io, Europa, Ganymede, Callisto), discovered by Galileo in 1610, the first moons ever found orbiting another planet. It spins faster than any other planet — a day is under 10 hours — which flattens it slightly at the poles, and its powerful magnetic field is the strongest of any planet, generating spectacular auroras. Its immense gravity acts like a cosmic shield, deflecting many comets and asteroids that might otherwise threaten the inner solar system." },
-  { name:"Saturn",  N0:113.6634, N1:2.38980e-5, i0:2.4886, i1:-1.081e-7, w0:339.3939, w1:2.97661e-5, a:9.55475, e0:0.055546, e1:-9.499e-9, M0:316.9670, M1:0.0334442282, color:"rgb(235,205,100)",
-    desc:"Famous for its spectacular ring system, made of countless chunks of ice and rock ranging from dust-sized to house-sized, likely the remains of a shattered moon or comet, or debris that never quite formed one. It's the second-largest planet in the solar system and the least dense — it would actually float in a big enough bathtub of water. A small telescope is enough to make out its rings, first correctly identified by Christiaan Huygens in 1655 (Galileo saw them decades earlier but couldn't tell what they were). It has at least 145 known moons, more than any other planet, including Titan — larger than the planet Mercury and the only moon in the solar system with a thick atmosphere and lakes of liquid methane." },
-];
-
-const SUN_DESC = "Our star — a 4.6-billion-year-old ball of plasma about 93 million miles away, roughly 109 times wider than Earth (over a million Earths could fit inside it by volume). It's powered by nuclear fusion, converting about 600 million tons of hydrogen into helium every second in its core, and its light takes about 8 minutes to reach us. Its surface temperature is around 10,000°F, but its core reaches roughly 27 million°F. It's about halfway through its roughly 10-billion-year life as a normal, 'main sequence' star; in about 5 billion years it will swell into a red giant, possibly engulfing Mercury and Venus. Its outer atmosphere (the corona) is, oddly, hundreds of times hotter than its visible surface — a mystery still being studied. Never look directly at it without proper solar filters.";
-const MOON_DESC = "Earth's only natural satellite, roughly 239,000 miles away (about a quarter-million miles) and about a quarter of Earth's diameter. It likely formed from debris after a Mars-sized object struck the young Earth around 4.5 billion years ago, and it's slowly drifting away from us — about 1.5 inches per year — meaning days on Earth were once shorter. It's tidally locked, so it always shows us the same face (the 'far side' was only first photographed in 1959), and its gravity is the main driver of ocean tides. Twelve astronauts walked on it during NASA's Apollo missions between 1969 and 1972. It has almost no atmosphere, so its surface temperature swings from about 250°F in sunlight to -250°F in shadow. Its rise/set times and phase shown here are calculated live for your location.";
-const ISS_DESC = "The International Space Station — a crewed research outpost orbiting about 250 miles up at roughly 17,500 mph, circling Earth every ~90 minutes (about 16 orbits a day, meaning its crew sees about 16 sunrises and sunsets daily). It's been continuously occupied since November 2000 by rotating crews of astronauts and cosmonauts from multiple countries (a joint project of the US, Russia, Europe, Japan, and Canada), and is roughly the size of a football field, making it the largest human-made object ever assembled in space. It's easy to spot with the naked eye — often brighter than any star, sometimes even outshining Venus — because sunlight reflects off its large solar panels; it's shown bright/cyan here when sunlit, and dim when it's passing through Earth's shadow. It's expected to be retired and deorbited sometime around 2030.";
-
-function planetAltAz(idx, t, lat, lon){
-  const d = dayNumber(t);
-  const s = sunAt(d);
-  const p = PLANETS[idx];
-  let { lon: plon, lat: plat, r: pr } = orbitLonLatR(
-    rev(p.N0 + p.N1*d), p.i0 + p.i1*d, rev(p.w0 + p.w1*d), p.a, p.e0 + p.e1*d, rev(p.M0 + p.M1*d));
-
-  const Mj = rev(19.8950 + 0.0830853001*d);
-  const Mn = rev(316.9670 + 0.0334442282*d);
-  if (idx === 3){
-    plon += -0.332*sind(2*Mj-5*Mn-67.6) - 0.056*sind(2*Mj-2*Mn+21) + 0.042*sind(3*Mj-5*Mn+21)
-          - 0.036*sind(Mj-2*Mn) + 0.022*cosd(Mj-Mn) + 0.023*sind(2*Mj-3*Mn+52) - 0.016*sind(Mj-5*Mn-69);
-  } else if (idx === 4){
-    plon += 0.812*sind(2*Mj-5*Mn-67.6) - 0.229*cosd(2*Mj-4*Mn-2) + 0.119*sind(Mj-2*Mn-3)
-          + 0.046*sind(2*Mj-6*Mn-69) + 0.014*sind(Mj-3*Mn+32);
-    plat += -0.020*cosd(2*Mj-4*Mn-2) + 0.018*sind(2*Mj-6*Mn-49);
-  }
-
-  const xg = pr*cosd(plon)*cosd(plat) + s.xs;
-  const yg = pr*sind(plon)*cosd(plat) + s.ys;
-  const zg = pr*sind(plat);
-  const glon = rev(atan2d(yg, xg));
-  const glat = atan2d(zg, Math.sqrt(xg*xg + yg*yg));
-  const { ra, dec } = eclipticToEquatorial(glon, glat, s.ecl);
-  return equatorialToHorizon(ra, dec, localSiderealTime(t, lon), lat);
-}
-
-const STARS = [
-  {name:"Sirius",raH:6.7525,dec:-16.716,mag:-1.46,desc:"The brightest star in the night sky — about 8.6 light-years away in the constellation Canis Major (the 'Great Dog'), which is why it's nicknamed the 'Dog Star.' It's actually a binary system: a bright main-sequence star paired with a faint white dwarf companion, Sirius B, the crushed remnant of a star that once outweighed Sirius A itself. Ancient Egyptians timed their calendar to Sirius's yearly reappearance at dawn, which coincided with the Nile's flooding."},
-  {name:"Canopus",raH:6.3992,dec:-52.696,mag:-0.74,desc:"The second-brightest star in the night sky, a massive, luminous supergiant roughly 310 light-years away — over 10,000 times brighter than our Sun. It's too far south to see from most of the US, but visible low on the horizon from Florida's latitude. Spacecraft have long used it as a navigation reference point because it's bright and sits far from the crowded plane of the Milky Way."},
-  {name:"Arcturus",raH:14.2610,dec:19.182,mag:-0.05,desc:"An orange giant about 37 light-years away, the brightest star in the constellation Bootes (the 'Herdsman') and the brightest in the entire northern sky. It's a star nearing the end of its normal life, swollen to about 25 times the Sun's diameter after exhausting the hydrogen fuel in its core. Follow the arc of the Big Dipper's handle to 'arc to Arcturus.'"},
-  {name:"Vega",raH:18.6156,dec:38.784,mag:0.03,desc:"A bright, young, nearby star about 25 light-years away — one point of the bright 'Summer Triangle' asterism (with Deneb and Altair). It's surrounded by a disk of dust that may be forming planets, and it was the very first star ever photographed, back in 1850. It also served as the fictional destination in Carl Sagan's novel 'Contact.'"},
-  {name:"Capella",raH:5.2782,dec:45.998,mag:0.08,desc:"Actually a system of four stars roughly 43 light-years away, appearing to the naked eye as one bright point in the constellation Auriga (the 'Charioteer'). Two of the four are yellow giants orbiting each other closely; the other two are faint, widely-separated red dwarfs. Its name means 'little she-goat' in Latin."},
-  {name:"Rigel",raH:5.2423,dec:-8.202,mag:0.13,desc:"A blue supergiant marking Orion's foot — one of the most luminous stars known, radiating roughly 120,000 times the Sun's light from about 860 light-years away. It's so massive and hot that it's burning through its fuel fast and is expected to end its life as a supernova within the next million years or so, an eyeblink in cosmic time."},
-  {name:"Procyon",raH:7.6550,dec:5.225,mag:0.34,desc:"A nearby star system about 11.5 light-years away, one of the closest stars visible to the naked eye. Like Sirius, it has a faint white-dwarf companion. Its name comes from Greek for 'before the dog,' because from many latitudes it rises just ahead of Sirius, the Dog Star."},
-  {name:"Betelgeuse",raH:5.9195,dec:7.407,mag:0.42,desc:"A huge red supergiant marking Orion's shoulder, so large that if it replaced our Sun its surface would extend past the orbit of Jupiter. It's nearing the end of its life and will eventually explode as a supernova — possibly within the next 100,000 years — which would briefly be visible in daylight from Earth. Its brightness visibly varies as it swells and shrinks."},
-  {name:"Achernar",raH:1.6286,dec:-57.237,mag:0.46,desc:"A hot blue star about 140 light-years away, flattened into a distinct oval shape because it spins so fast — its equator moves at roughly 250 miles per second, close to the breakup speed for a star of its mass. Its name comes from Arabic for 'the end of the river,' referring to its place at the tip of the constellation Eridanus."},
-  {name:"Altair",raH:19.8464,dec:8.868,mag:0.76,desc:"A rapidly spinning star about 17 light-years away, another point of the 'Summer Triangle' asterism (with Vega and Deneb). It completes one full rotation in under 9 hours (versus the Sun's ~27 days), which flattens it into an oblate shape similar to Achernar's. It's one of the closest bright stars to Earth."},
-  {name:"Aldebaran",raH:4.5987,dec:16.509,mag:0.86,desc:"An orange giant about 65 light-years away, marking the fiery eye of Taurus, the bull. It appears to sit within the V-shaped Hyades star cluster, though it's actually much closer to Earth than the cluster itself — just a chance alignment. NASA's Pioneer 10 probe is heading roughly in its direction, though it will take over 2 million years to get there."},
-  {name:"Antares",raH:16.4901,dec:-26.432,mag:0.96,desc:"A red supergiant marking the heart of Scorpius, hundreds of times larger than our Sun and glowing with a distinctly reddish-orange color easy to spot with the naked eye. Its name means 'rival of Mars' (Ares) because of that similar fiery hue. Like Betelgeuse, it's a massive star living out its final stellar stages before an eventual supernova."},
-  {name:"Spica",raH:13.4199,dec:-11.161,mag:0.97,desc:"A close pair of hot, massive blue stars orbiting each other, about 250 light-years away, so close together they distort each other's shape into eggs rather than spheres. They're the brightest star in Virgo and complete an orbit around each other in only about 4 days. Together they're thousands of times more luminous than the Sun."},
-  {name:"Pollux",raH:7.7553,dec:28.026,mag:1.14,desc:"An orange giant about 34 light-years away, one of the twin stars of Gemini (with Castor) — actually the brighter of the two despite Castor getting top billing in the constellation's name. In 2006 astronomers confirmed a giant planet, at least twice Jupiter's mass, orbiting it."},
-  {name:"Fomalhaut",raH:22.9608,dec:-29.622,mag:1.16,desc:"A young, nearby star about 25 light-years away, known for a surrounding disk of dust and debris where a planet was directly imaged in visible light — a rare feat, since planets are normally far too faint next to their star's glare. Its name comes from Arabic for 'mouth of the fish,' as it marks the mouth of Piscis Austrinus."},
-  {name:"Deneb",raH:20.6905,dec:45.280,mag:1.25,desc:"One of the most luminous stars known, so far away — over 1,000 light-years, some estimates put it near 2,600 — that its true brightness is hard to fathom: it may shine with the light of 200,000 Suns. Despite that extreme distance it's still one of the brightest stars in our sky, marking the tail of Cygnus, the swan, and a point of the Summer Triangle."},
-  {name:"Regulus",raH:10.1395,dec:11.967,mag:1.35,desc:"A fast-spinning multi-star system about 79 light-years away, marking the heart of Leo, the lion. Its main star spins so quickly — once every 16 hours — that it's squashed into a flattened, egg-like shape, and it has at least three fainter companion stars orbiting it. Its name means 'little king' in Latin."},
-  {name:"Castor",raH:7.5767,dec:31.888,mag:1.58,desc:"Actually six stars in one system, about 51 light-years away — the other twin of Gemini (with Pollux). What looks like a single point is really three pairs of stars, each pair orbiting closely, all three pairs orbiting a common center of mass — one of the more complex multi-star systems visible to the naked eye."},
-  {name:"Polaris",raH:2.5303,dec:89.264,mag:1.98,desc:"The North Star — it sits almost exactly above Earth's north pole, so as Earth rotates, the whole sky appears to wheel around it while it barely moves, making it invaluable for navigation for centuries. It's actually a triple-star system and a type of pulsating star (a Cepheid variable) that subtly changes brightness. Due to Earth's slow 26,000-year wobble (precession), it won't always be the pole star — around 3000 BC, that role belonged to a different star."},
-  {name:"Alpha Centauri",raH:14.6600,dec:-60.8339,mag:-0.27,desc:"The closest star system to our own Sun, only about 4.4 light-years away — a close pair of Sun-like stars orbiting each other, plus a faint, even closer red dwarf companion, Proxima Centauri, which hosts a small rocky planet in its habitable zone. From Florida's latitude it only barely clears the southern horizon, best seen low in the sky on clear spring nights. It's the third-brightest star in the sky, but far too far south for most of the US to ever see it."},
-  {name:"Hadar",raH:14.0633,dec:-60.3730,mag:0.61,desc:"Also called Agena, a blue-white giant system around 390 light-years away, marking one of the 'feet' of Centaurus, the Centaur, right alongside Alpha Centauri. It's actually two massive, hot stars orbiting closely together, radiating tens of thousands of times the Sun's light. Like its neighbor Alpha Centauri, it skims the southern horizon from Florida and is invisible from most of the northern US."},
-  {name:"Acrux",raH:12.4433,dec:-63.0991,mag:0.77,desc:"The brightest star of Crux, the Southern Cross, and actually a multiple-star system of hot blue-white stars about 320 light-years away. It never rises for most of the northern hemisphere, but from south Florida's latitude it can just peek above the southern horizon on clear nights — a treat normally reserved for travelers south of the equator. Sailors have used the Southern Cross to find south much like Polaris marks north."},
-  {name:"Mimosa",raH:12.7950,dec:-59.6888,mag:1.25,desc:"Also known as Beta Crucis, the second-brightest star of the Southern Cross — a blue-white giant about 280 light-years away that pulses slightly in brightness as it flexes (a 'Beta Cephei' type variable). Paired with Acrux, it forms the long axis of the cross shape. Like the rest of Crux, it sits low in Florida's southern sky and is unreachable from most of the continental US."},
-  {name:"Mirfak",raH:3.4050,dec:49.8612,mag:1.79,desc:"The brightest star in Perseus, a yellow-white supergiant about 510 light-years away, sitting amid a loose scattering of fainter stars sometimes called the 'Alpha Persei Cluster.' Perseus, in Greek myth, is the hero who beheaded Medusa and later rescued Andromeda — both constellations lie nearby in the sky. It rides high overhead on autumn and winter evenings."},
-];
-
-// A handful of easy-to-recognize constellations (J2000 RA/Dec), each as a small
-// set of member stars plus line segments connecting them by index, and an
-// "anchor" index used to place the name label.
-const CONSTELLATIONS = [
-  { name: "Orion", anchor: 0, desc: "The Hunter — one of the most recognizable constellations in the sky, anchored by three evenly-spaced stars forming Orion's Belt (Mintaka, Alnilam, Alnitak) and flanked by the bright red supergiant Betelgeuse on one shoulder and the blue supergiant Rigel at his foot. Hanging just below the belt is the Orion Nebula, a vast stellar nursery where new stars are actively being born — visible even in binoculars as a fuzzy patch. Best seen in winter evenings, straddling the celestial equator so it's visible from nearly everywhere on Earth.", stars: [
-      { raH: 5.9195, dec: 7.407 },    // 0 Betelgeuse
-      { raH: 5.4188, dec: 6.3497 },   // 1 Bellatrix
-      { raH: 5.5334, dec: -0.2991 },  // 2 Mintaka
-      { raH: 5.6036, dec: -1.2019 },  // 3 Alnilam
-      { raH: 5.6791, dec: -1.9426 },  // 4 Alnitak
-      { raH: 5.2423, dec: -8.202 },   // 5 Rigel
-      { raH: 5.7959, dec: -9.6696 },  // 6 Saiph
-    ], lines: [[0,1],[1,2],[2,3],[3,4],[4,0],[2,5],[4,6]] },
-  { name: "Big Dipper", anchor: 6, desc: "A well-known asterism (star pattern) of seven bright stars forming the tail and hindquarters of Ursa Major, the Great Bear — not a constellation on its own, but the most famous part of one. Its two 'pointer' stars, Dubhe and Merak, form the outer edge of the dipper's bowl and, extended, point almost directly to Polaris, the North Star — a trick sailors and hikers have used for centuries to find true north. The middle 'bend' of the handle, Mizar, is itself a famous double star, visible as two points with sharp eyes or binoculars.", stars: [
-      { raH: 11.0622, dec: 61.7511 }, // 0 Dubhe
-      { raH: 11.0307, dec: 56.3824 }, // 1 Merak
-      { raH: 11.8972, dec: 53.6948 }, // 2 Phecda
-      { raH: 12.2571, dec: 57.0326 }, // 3 Megrez
-      { raH: 12.9004, dec: 55.9598 }, // 4 Alioth
-      { raH: 13.3988, dec: 54.9254 }, // 5 Mizar
-      { raH: 13.7923, dec: 49.3133 }, // 6 Alkaid
-    ], lines: [[0,1],[1,2],[2,3],[3,0],[3,4],[4,5],[5,6]] },
-  { name: "Cassiopeia", anchor: 2, desc: "A distinctive 'W' (or 'M', depending on the season) shaped constellation of five bright stars, named for a vain queen in Greek mythology who boasted her beauty rivaled the sea nymphs' — angering the gods and setting off the myth that also involves Perseus and Andromeda nearby in the sky. Being close to the north celestial pole, it circles Polaris and stays visible year-round from mid-to-high northern latitudes, making it a reliable seasonal landmark even when Orion and the summer constellations aren't up.", stars: [
-      { raH: 0.1530, dec: 59.1498 },  // 0 Caph
-      { raH: 0.6751, dec: 56.5373 },  // 1 Schedar
-      { raH: 0.9451, dec: 60.7167 },  // 2 Gamma Cas
-      { raH: 1.4304, dec: 60.2353 },  // 3 Ruchbah
-      { raH: 1.9066, dec: 63.6701 },  // 4 Segin
-    ], lines: [[0,1],[1,2],[2,3],[3,4]] },
-  { name: "Scorpius", anchor: 2, desc: "The Scorpion — a summer constellation with a long, distinctive curved tail ending in a stinger (Shaula and Lesath). Its heart is marked by the red supergiant Antares, whose fiery color gives the whole shape a striking look low in the southern sky. In Greek mythology it's the scorpion that killed the hunter Orion, and the two are placed on opposite sides of the sky so they're never up at the same time. It sits along the zodiac and crosses part of the dense Milky Way band.", stars: [
-      { raH: 16.0056, dec: -22.6217 }, // 0 Dschubba
-      { raH: 16.0906, dec: -19.8054 }, // 1 Graffias
-      { raH: 16.4901, dec: -26.432 },  // 2 Antares
-      { raH: 17.5601, dec: -37.1038 }, // 3 Shaula
-      { raH: 17.5128, dec: -37.2958 }, // 4 Lesath
-    ], lines: [[1,0],[0,2],[2,3],[3,4]] },
-  { name: "Leo", anchor: 0, desc: "The Lion — a zodiac constellation whose brightest star, Regulus, marks the lion's heart, with a curving line of stars forming his mane and head (the 'Sickle') and a triangle of stars to the east tracing his hindquarters and tail. It's one of the few constellations that actually looks like what it's named for. Best seen on spring evenings, and the radiant point for the Leonid meteor shower every November.", stars: [
-      { raH: 10.1395, dec: 11.967 },  // 0 Regulus
-      { raH: 10.3328, dec: 19.8415 }, // 1 Algieba
-      { raH: 11.2353, dec: 20.5237 }, // 2 Zosma
-      { raH: 11.2373, dec: 15.4297 }, // 3 Chertan
-      { raH: 11.8177, dec: 14.572 },  // 4 Denebola
-    ], lines: [[0,1],[1,2],[2,3],[3,4],[3,0]] },
-  { name: "Cygnus", anchor: 0, desc: "The Swan, also known as the Northern Cross for the simple cross shape its brightest stars trace across the summer Milky Way. Deneb, at the swan's tail, is one of the most intrinsically luminous stars known, while Albireo, at its head, is a famous telescope target — a close double star showing a striking gold-and-blue color contrast. It flies high overhead on summer and early autumn nights.", stars: [
-      { raH: 20.6905, dec: 45.280 },  // 0 Deneb
-      { raH: 20.3704, dec: 40.2566 }, // 1 Sadr
-      { raH: 19.5120, dec: 27.9597 }, // 2 Albireo
-      { raH: 20.7705, dec: 33.9703 }, // 3 Gienah
-      { raH: 19.7496, dec: 45.1309 }, // 4 Delta Cygni
-    ], lines: [[0,1],[1,2],[1,3],[1,4]] },
-  { name: "Gemini", anchor: 0, desc: "The Twins, named for Castor and Pollux, the two bright stars marking their heads, with fainter chains of stars trailing down to form their bodies side by side. In Greek myth they were inseparable half-brothers placed in the sky together after one died, so Zeus could let them share immortality. A zodiac constellation, prominent on winter evenings and the source of the December Geminid meteor shower.", stars: [
-      { raH: 7.5767, dec: 31.888 },   // 0 Castor
-      { raH: 7.7553, dec: 28.026 },   // 1 Pollux
-      { raH: 6.7324, dec: 25.1311 },  // 2 Mebsuta
-      { raH: 7.3351, dec: 21.9823 },  // 3 Wasat
-      { raH: 6.3828, dec: 22.5133 },  // 4 Tejat
-      { raH: 6.6285, dec: 16.3993 },  // 5 Alhena
-    ], lines: [[0,2],[2,4],[4,5],[1,3],[3,2]] },
-  { name: "Ursa Minor", anchor: 0, desc: "The Little Bear — a dimmer echo of the Big Dipper, with Polaris anchoring the end of its handle and barely moving as the rest of the sky wheels around it. Its bowl stars, Kochab and Pherkad, are bright enough to be useful 'guardians of the pole' even where city lights wash out the fainter handle stars. Because it sits so close to the celestial pole, it's visible every clear night from mid-northern latitudes, never rising or setting.", stars: [
-      { raH: 2.5303, dec: 89.264 },   // 0 Polaris
-      { raH: 17.5365, dec: 86.5864 }, // 1 Yildun
-      { raH: 16.7656, dec: 82.0373 }, // 2 Epsilon UMi
-      { raH: 15.7341, dec: 77.794 },  // 3 Zeta UMi
-      { raH: 14.8451, dec: 74.1555 }, // 4 Kochab
-      { raH: 15.3454, dec: 71.8340 }, // 5 Pherkad
-    ], lines: [[0,1],[1,2],[2,3],[3,4],[4,5]] },
-  { name: "Crux", anchor: 0, desc: "The Southern Cross — a small, compact constellation marking a cross shape with its four brightest stars, famous enough to appear on the flags of several southern-hemisphere nations. It's too far south for most of the US to ever see, but from south Florida's latitude it can just scrape above the southern horizon on clear, dark nights, alongside its neighbors Alpha and Beta Centauri. Sailors in the southern hemisphere use it the way northern sailors use Polaris — to find true south.", stars: [
-      { raH: 12.4433, dec: -63.0991 }, // 0 Acrux
-      { raH: 12.7950, dec: -59.6888 }, // 1 Mimosa
-      { raH: 12.5194, dec: -57.1133 }, // 2 Gacrux
-      { raH: 12.2522, dec: -58.7489 }, // 3 Delta Crucis
-    ], lines: [[0,2],[1,3]] },
-];
-
-// Major annual meteor showers (Northern Hemisphere), with typical active window
-// and peak date. Peak dates shift by at most a day or two year to year; close
-// enough for a "what's coming up" display.
-const METEOR_SHOWERS = [
-  // raH/dec = the shower's radiant (where its meteors appear to streak from), J2000, used to
-  // calculate which direction to look. bestHour = a typical best local-time hour to watch on
-  // the peak night (usually once the radiant is well up and the sky's darkest).
-  { name: "Quadrantids", active: "Dec 26 – Jan 16", peakMonth: 1, peakDay: 4, raH: 15.33, dec: 49, bestHour: 3,
-    desc: "One of the strongest annual showers, with a sharp peak lasting only a few hours rather than a long gentle maximum, so timing matters more than usual. Its radiant sits in what used to be the constellation Quadrans Muralis (the 'Mural Quadrant'), near the handle of the Big Dipper -- the shower kept the old name even though the constellation itself was dropped in 1922. Unusually, its parent isn't a classic icy comet but the asteroid 2003 EH1, thought to be a burnt-out comet nucleus." },
-  { name: "Lyrids", active: "Apr 14 – 30", peakMonth: 4, peakDay: 22, raH: 18.07, dec: 34, bestHour: 3,
-    desc: "A modest but reliable shower that's been observed and recorded for over 2,700 years, among the oldest known meteor showers. Its parent is Comet C/1861 G1 (Thatcher), which swings by only once every ~415 years, leaving a debris trail Earth crosses every April. The radiant is near Vega in Lyra, and while typical rates are modest, it occasionally produces unpredictable bright fireballs." },
-  { name: "Eta Aquariids", active: "Apr 19 – May 28", peakMonth: 5, peakDay: 6, raH: 22.53, dec: -1, bestHour: 4,
-    desc: "Made of dust shed by Halley's Comet -- the same parent body as October's Orionids, just a different part of its debris trail. The radiant sits low near Aquarius, so this shower favors the southern hemisphere and the hours before dawn; from Florida it's still worth a look since the radiant does clear the horizon. Its meteors are among the fastest of any shower, slamming into the atmosphere at about 66 km/s (150,000 mph), which makes for quick, bright streaks." },
-  { name: "Southern Delta Aquariids", active: "Jul 12 – Aug 23", peakMonth: 7, peakDay: 30, raH: 22.60, dec: -16, bestHour: 3,
-    desc: "A lesser-known shower that overlaps with the much more famous Perseids, so its meteors are often seen without being recognized as a separate shower. Like the Eta Aquariids, its radiant is deep in the southern sky near Aquarius, favoring southern latitudes and pre-dawn viewing. Rates are modest -- usually well under 20 per hour even at the peak -- but it adds a steady trickle of extra meteors to late-summer nights." },
-  { name: "Perseids", active: "Jul 14 – Sep 1", peakMonth: 8, peakDay: 12, raH: 3.07, dec: 58, bestHour: 2,
-    desc: "The most popular meteor shower of the year for most of the US, peaking on warm August nights and often producing 50-100+ meteors per hour under dark skies. Its parent is Comet 109P/Swift-Tuttle, a large nucleus (about 16 miles across) that last passed near Earth in 1992 and won't return until 2126. The radiant is in Perseus, rising in the northeast after dark and climbing higher through the night, and the shower is known for producing an above-average share of bright fireballs." },
-  { name: "Orionids", active: "Oct 2 – Nov 7", peakMonth: 10, peakDay: 21, raH: 6.33, dec: 16, bestHour: 2,
-    desc: "Debris from Halley's Comet -- Earth crosses this same comet's trail twice a year, producing the Eta Aquariids in May and the Orionids in October. Meteors appear to streak away from a radiant near Orion's upraised 'club,' and because they hit the atmosphere fast (about 66 km/s), they often leave glowing trails that linger a second or two after the flash. Typical peak rates run 10-20 per hour." },
-  { name: "Leonids", active: "Nov 3 – Dec 2", peakMonth: 11, peakDay: 17, raH: 10.20, dec: 22, bestHour: 2,
-    desc: "Famous for producing true meteor storms -- thousands of meteors per hour -- roughly every 33 years when Earth passes through an especially dense, recent clump of debris from parent Comet 55P/Tempel-Tuttle, most memorably in 1833 and 1966. In an ordinary year (like this one) rates are far more modest, typically 10-15 per hour, with a radiant in Leo that rises late and is best seen after midnight." },
-  { name: "Geminids", active: "Dec 4 – 17", peakMonth: 12, peakDay: 14, raH: 7.47, dec: 33, bestHour: 1,
-    desc: "Often the single best shower of the year, with reliably high rates -- over 100 per hour at a good peak -- and bright, slow-moving, often yellowish meteors that are easy to watch even for casual observers. Unusually, its parent isn't an icy comet but 3200 Phaethon, a rocky asteroid-like body on a comet-like orbit that gets so close to the Sun its surface cracks and sheds the debris that makes this shower. The radiant is near Castor in Gemini and is well placed for Florida's latitude." },
-  { name: "Ursids", active: "Dec 17 – 26", peakMonth: 12, peakDay: 22, raH: 14.47, dec: 76, bestHour: 2,
-    desc: "A minor, often-overlooked shower that peaks right around the winter solstice, competing for attention with the Geminids just a week earlier. Its parent is Comet 8P/Tuttle, and its radiant sits near Kochab in Ursa Minor (the Little Dipper's bowl), close enough to the pole that it's up all night from Florida's latitude, even if it never climbs very high. Rates are modest, usually 5-10 per hour, occasionally more in an outburst year." },
-];
-
-// Works out which compass direction (and roughly how high up) the shower's radiant
-// is in, around its peak night, for the viewer's actual location -- rather than a
-// fixed hardcoded direction, since that depends on latitude and time of night.
-// Scans forward a few hours from the shower's usual best-viewing hour in case the
-// radiant hasn't cleared the horizon yet right at that hour.
-function meteorViewingTip(sh, peakDate, lat, lon){
-  for (let h = 0; h < 8; h++){
-    const d = new Date(peakDate.getFullYear(), peakDate.getMonth(), peakDate.getDate(), sh.bestHour + h, 0, 0);
-    const lst = localSiderealTime(Math.floor(d.getTime() / 1000), lon);
-    const pos = equatorialToHorizon(sh.raH * 15, sh.dec, lst, lat);
-    if (pos.alt > 10){
-      const dir = degToCompass(pos.az);
-      const height = pos.alt > 60 ? "high overhead" : pos.alt > 30 ? "partway up the sky" : "low in the sky";
-      const timeStr = d.toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" });
-      return "Around its peak, it's best viewed around " + timeStr + ", looking toward the " + dir + " (" + height + ").";
-    }
-  }
-  return null;
-}
-
-function nextMeteorShower(nowSec){
-  const today = new Date(nowSec * 1000);
-  let best = null, bestDelta = Infinity;
-  for (const sh of METEOR_SHOWERS){
-    let peak = new Date(today.getFullYear(), sh.peakMonth - 1, sh.peakDay);
-    if (peak < today) peak = new Date(today.getFullYear() + 1, sh.peakMonth - 1, sh.peakDay);
-    const delta = peak - today;
-    if (delta < bestDelta){ bestDelta = delta; best = { name: sh.name, active: sh.active, peakDate: peak, desc: sh.desc, raH: sh.raH, dec: sh.dec, bestHour: sh.bestHour }; }
-  }
-  return best;
-}
-
-function issAltAz(lat, lon, issLat, issLon, issHeightKm){
-  const R = 6371.0;
-  const p = lat*RAD, l = lon*RAD, ps = issLat*RAD, ls = issLon*RAD;
-  const ox = R*Math.cos(p)*Math.cos(l), oy = R*Math.cos(p)*Math.sin(l), oz = R*Math.sin(p);
-  const sx = (R+issHeightKm)*Math.cos(ps)*Math.cos(ls);
-  const sy = (R+issHeightKm)*Math.cos(ps)*Math.sin(ls);
-  const sz = (R+issHeightKm)*Math.sin(ps);
-  const dx = sx-ox, dy = sy-oy, dz = sz-oz;
-  const e = -Math.sin(l)*dx + Math.cos(l)*dy;
-  const n = -Math.sin(p)*Math.cos(l)*dx - Math.sin(p)*Math.sin(l)*dy + Math.cos(p)*dz;
-  const u =  Math.cos(p)*Math.cos(l)*dx + Math.cos(p)*Math.sin(l)*dy + Math.sin(p)*dz;
-  return { alt: Math.atan2(u, Math.sqrt(e*e+n*n))*DEG, az: rev(Math.atan2(e,n)*DEG) };
-}
-
-function findRiseSet(altFn, start, end){
-  const h0 = -0.833, step = 600;
-  let rise = 0, set = 0;
-  let prev = altFn(start) - h0;
-  for (let t = start + step; t <= end + step && (rise === 0 || set === 0); t += step){
-    const tt = t > end ? end : t;
-    const cur = altFn(tt) - h0;
-    const up = prev < 0 && cur >= 0, down = prev >= 0 && cur < 0;
-    if ((up && rise === 0) || (down && set === 0)){
-      let lo = tt - step, hi = tt;
-      for (let k = 0; k < 10; k++){
-        const mid = lo + Math.floor((hi - lo) / 2);
-        const v = altFn(mid) - h0;
-        if ((v >= 0) === up) hi = mid; else lo = mid;
-      }
-      if (up) rise = hi; else set = hi;
-    }
-    prev = cur;
-    if (tt === end) break;
-  }
-  return { rise, set };
-}
-
-function pastFull(t, lat, lon){
-  const v = rev(moonPhaseAngle(t, lat, lon) - 180.0);
-  return v > 180 ? v - 360 : v;
-}
-
-function findNextFullMoon(from, lat, lon){
-  const step = 6 * 3600;
-  let prev = pastFull(from, lat, lon);
-  for (let t = from + step; t <= from + 32*86400; t += step){
-    const cur = pastFull(t, lat, lon);
-    if (prev < 0 && cur >= 0){
-      let lo = t - step, hi = t;
-      for (let k = 0; k < 16; k++){
-        const mid = lo + Math.floor((hi - lo) / 2);
-        if (pastFull(mid, lat, lon) >= 0) hi = mid; else lo = mid;
-      }
-      return hi;
-    }
-    prev = cur;
-  }
-  return 0;
-}
-
-function localMidnight(unixSec, addDays){
-  const d = new Date(unixSec * 1000);
-  return Math.floor(new Date(d.getFullYear(), d.getMonth(), d.getDate() + addDays, 0, 0, 0).getTime() / 1000);
-}
-
-// The Moon rises about 50 min later each day, so roughly once a month a given
-// calendar day has NO moonrise (or no moonset) at all -- it's the day before's
-// moonrise is still slipping past midnight. Rather than reporting "none today"
-// on those days, scan forward a few days from today's start until the next
-// rise/set actually shows up, same approach as the tide and planet-rise scans.
-function findNextMoonEvent(fromSec, lat, lon, rising){
-  const h0 = -0.833, stepSec = 300, maxHorizon = 5 * 86400;
-  let prev = moonAt(fromSec, lat, lon).alt - h0;
-  for (let t = fromSec + stepSec; t <= fromSec + maxHorizon; t += stepSec){
-    const cur = moonAt(t, lat, lon).alt - h0;
-    const crossed = rising ? (prev < 0 && cur >= 0) : (prev >= 0 && cur < 0);
-    if (crossed){
-      let lo = t - stepSec, hi = t;
-      for (let k = 0; k < 12; k++){
-        const mid = lo + Math.floor((hi - lo) / 2);
-        const v = moonAt(mid, lat, lon).alt - h0;
-        if ((v >= 0) === rising) hi = mid; else lo = mid;
-      }
-      return hi;
-    }
-    prev = cur;
-  }
-  return null;
-}
-
-function computeDailyEvents(now, lat, lon){
-  const start = localMidnight(now, 0), end = localMidnight(now, 1);
-  const sun = findRiseSet((t) => sunAltAz(t, lat, lon).alt, start, end);
-  const nextFullMoon = findNextFullMoon(start, lat, lon);
-  return { sunRise: sun.rise, sunSet: sun.set, nextFullMoon, day: new Date(now*1000).getDate() };
-}
-
-function mwIntensity(l, b){
-  const lc = l > 180 ? l - 360 : l;
-  const amp = 0.35 + 0.65*Math.exp(-(lc/55)*(lc/55)) + 0.30*Math.exp(-((lc-78)/18)*((lc-78)/18));
-  const sigma = 4.5 + 4.5*Math.exp(-(lc/35)*(lc/35));
-  let I = amp * Math.exp(-(b/sigma)*(b/sigma));
-  if (lc > 5 && lc < 75) I -= 0.45*amp*Math.exp(-((b-1.5)/1.8)*((b-1.5)/1.8));
-  return Math.max(0, Math.min(1, I));
-}
-
-function computeMilkyWay(now, lat, lon){
-  const aG = 192.85948*RAD, dG = 27.12825*RAD, lN = 122.93192;
-  const sdG = Math.sin(dG), cdG = Math.cos(dG);
-  const sl = Math.sin(lat*RAD), cl = Math.cos(lat*RAD);
-  const lst = localSiderealTime(now, lon) * RAD;
-  const pts = [];
-  for (let l = 0; l < 360; l += 2.0){
-    for (let b = -12; b <= 12.01; b += 1.5){
-      const I = mwIntensity(l, b);
-      if (I < 0.08) continue;
-      const sb = Math.sin(b*RAD), cb = Math.cos(b*RAD), dl = (lN - l)*RAD;
-      const sd = sdG*sb + cdG*cb*Math.cos(dl);
-      const dec = Math.asin(sd);
-      const ra = aG + Math.atan2(cb*Math.sin(dl), cdG*sb - sdG*cb*Math.cos(dl));
-      const ha = lst - ra;
-      const x = Math.cos(ha)*Math.cos(dec), y = Math.sin(ha)*Math.cos(dec), z = sd;
-      const xhor = x*sl - z*cl, zhor = x*cl + z*sl;
-      if (zhor <= 0) continue;
-      const alt = Math.asin(zhor)*DEG;
-      const az = rev(Math.atan2(y, xhor)*DEG + 180.0);
-      pts.push({ alt, az, level: I });
-    }
-  }
-  return pts;
-}
-
-// alt/az -> {x,y} in a unit disc, radius 1, centered at 0,0. Whichever azimuth is
-// currently "facing" (state.view.az -- East by default, or a live compass heading
-// once enabled) is drawn at the top of the disc.
-function plotUnit(alt, az){
-  if (alt < -0.5) return null;
-  if (alt < 0) alt = 0;
-  const r = (90.0 - alt) / 90.0;
-  const th = (az - state.view.az) * RAD;
-  return { x: r * Math.sin(th), y: -r * Math.cos(th) };
-}
-
-/* =====================================================================
-   APP STATE + LOCATION
-   ===================================================================== */
-const state = {
-  lat: null, lon: null, locSource: null,
-  events: null, mw: null, mwCalcAt: 0,
-  iss: { valid: false, lat: 0, lon: 0, heightKm: 420, sunlit: false },
-  launches: [],              // up to 2 upcoming launches
-  launchError: "Loading…",   // shown only when there are zero launches to show
-  detailsOpenIdx: -1,
-  solar: { gscale: null, gscaleText: null, xrayClass: null, loaded: false },
-  outlook: { text: null, loaded: false, loading: false, open: false },
-  mapObjects: [],             // tappable {x,y,r,name,desc} rebuilt every drawSky() call
-  tides: { high: null, low: null },  // next predicted high/low tide (computed offline)
-  ocean: { waterTempF: null, seasFt: null, windMph: null, windDirDeg: null, loaded: false }, // live ocean conditions (needs connection)
-  view: { az: 90, compassOn: false, nudge: 0 }, // az = azimuth currently drawn at the top of the sky map (90 = facing East, the default)
-  nextPlanet: { name: null, sec: null }, // next below-horizon planet to rise (computed offline)
-  moon: { rise: null, set: null }, // next moonrise/moonset from right now (computed offline; recomputed once each passes)
-  meteorShowerInfo: null, // the currently-displayed next-meteor-shower object, for its click-to-info popup
-  oceanME: { tideHigh: null, tideLow: null, waterTempF: null, airTempF: null, seasFt: null, windMph: null, windDirDeg: null, loaded: false }, // Small Point, ME ocean conditions (needs connection)
-};
-
-const el = (id) => document.getElementById(id);
-
-function saveLocation(lat, lon, source){
-  state.lat = lat; state.lon = lon; state.locSource = source;
-  try { localStorage.setItem("skyview_loc", JSON.stringify({lat, lon, source})); } catch(e){}
-  el("locBtn").textContent = "Location: " + lat.toFixed(2) + ", " + lon.toFixed(2) + (source === "gps" ? " (GPS)" : "");
-  state.events = null;   // force recompute for the new location
-  state.moon = { rise: null, set: null };
-  state.mw = null;
-  fetchLaunch();          // launch list doesn't depend on location, but re-check on first load
-}
-
-function loadSavedLocation(){
-  try {
-    const raw = localStorage.getItem("skyview_loc");
-    if (raw) return JSON.parse(raw);
-  } catch(e){}
-  return null;
-}
-
-function requestGps(onFail){
-  if (!navigator.geolocation){ onFail && onFail(); return; }
-  el("locBtn").textContent = "Location: locating…";
-  navigator.geolocation.getCurrentPosition(
-    (pos) => saveLocation(pos.coords.latitude, pos.coords.longitude, "gps"),
-    () => { onFail ? onFail() : openLocationModal(); },
-    { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
-  );
-}
-
-function openLocationModal(){
-  if (state.lat != null){ el("latInput").value = state.lat; el("lonInput").value = state.lon; }
-  el("locModal").classList.add("open");
-}
-function closeLocationModal(){ el("locModal").classList.remove("open"); }
-
-el("rotLeftBtn").addEventListener("click", () => nudgeView(-15));
-el("rotRightBtn").addEventListener("click", () => nudgeView(15));
-el("compassToggleBtn").addEventListener("click", () => { if (state.view.compassOn) disableCompass(); else enableCompass(); });
-
-el("locBtn").addEventListener("click", openLocationModal);
-el("locClose").addEventListener("click", closeLocationModal);
-el("useGpsBtn").addEventListener("click", () => { requestGps(() => alert("Couldn't get GPS location. You can enter coordinates below instead.")); closeLocationModal(); });
-el("setManualBtn").addEventListener("click", () => {
-  const lat = parseFloat(el("latInput").value), lon = parseFloat(el("lonInput").value);
-  if (!isFinite(lat) || !isFinite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180){
-    alert("Enter a valid latitude (-90 to 90) and longitude (-180 to 180)."); return;
-  }
-  saveLocation(lat, lon, "manual");
-  closeLocationModal();
-});
-
-/* =====================================================================
-   LIVE DATA: ISS + next launch
-   ===================================================================== */
-async function fetchISS(){
-  try {
-    const res = await fetch("https://api.wheretheiss.at/v1/satellites/25544", { cache: "no-store" });
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    const j = await res.json();
-    state.iss.lat = j.latitude; state.iss.lon = j.longitude; state.iss.heightKm = j.altitude || 420;
-    state.iss.sunlit = j.visibility === "daylight";
-    state.iss.valid = true;
-  } catch (e) {
-    // Leave the last known position in place; just don't update.
-  }
-}
-
-function shortPad(p){
-  return (p || "").replace("Space Launch Complex ", "SLC-").replace("Launch Complex ", "LC-");
-}
-
-async function fetchLaunch(){
-  try {
-    const url = "https://ll.thespacedevs.com/2.3.0/launches/upcoming/?limit=5&location__ids=12,27&hide_recent_previous=true&mode=normal";
-    const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    const j = await res.json();
-    const now = Date.now();
-    const found = [];
-    for (const r of (j.results || [])){
-      const t = Date.parse(r.net);
-      if (!t || t < now - 600000) continue;
-      found.push({
-        valid: true,
-        mission: (r.mission && r.mission.name) || (r.name || "").split(" | ").pop(),
-        rocket: (r.rocket && r.rocket.configuration && r.rocket.configuration.name) || "",
-        pad: shortPad(r.pad && r.pad.name),
-        status: (r.status && r.status.abbrev) || "",
-        desc: (r.mission && r.mission.description) || "",
-        provider: (r.launch_service_provider && r.launch_service_provider.name) || "",
-        orbit: (r.mission && r.mission.orbit && r.mission.orbit.name) || "",
-        precision: (r.net_precision && r.net_precision.name) || "",
-        timeMs: t,
-      });
-      if (found.length === 2) break;
-    }
-    if (found.length){ state.launches = found; renderLaunches(); }
-    else if (!state.launches.length){ state.launchError = "No launches scheduled"; renderLaunches(); }
-  } catch (e) {
-    if (!state.launches.length){ state.launchError = "Launch data unavailable right now"; renderLaunches(); }
-  }
-}
-
-function launchStatusColor(status){
-  // Plain hex (not a CSS var) so callers can safely append an alpha suffix, e.g. "#3ddc8433".
-  if (status === "Go") return "#3ddc84";
-  if (status === "TBC") return "#ffb454";
-  if (status === "Hold") return "#ff8a3d";
-  return "#5a6178";
-}
-
-function launchTimeKnown(l){
-  return l.precision === "Second" || l.precision === "Minute" || l.precision === "Hour" || l.precision === "";
-}
-
-function launchWhenText(l){
-  const d = new Date(l.timeMs);
-  const dayStr = d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-  if (launchTimeKnown(l)){
-    return dayStr + "  " + d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  } else if (l.precision === "Day" || l.precision === "Morning" || l.precision === "Afternoon"){
-    return dayStr + "  (time TBD)";
-  }
-  return "NET " + d.toLocaleDateString(undefined, { month: "short", year: "numeric" });
-}
-
-function countdownText(l){
-  const secs = Math.round((l.timeMs - Date.now()) / 1000);
-  if (!launchTimeKnown(l) || secs <= 0) return "";
-  if (secs >= 86400) return "  (in " + Math.floor(secs/86400) + "d " + Math.floor((secs%86400)/3600) + "h)";
-  if (secs >= 3600)  return "  (in " + Math.floor(secs/3600) + "h " + Math.floor((secs%3600)/60) + "m)";
-  return "  (in " + Math.max(1, Math.round(secs/60)) + " min)";
-}
-
-function launchBoxHtml(l){
-  return '<div class="launchTop">' +
-      '<div class="launchMission">' + escapeHtml(l.mission || "Unnamed mission") + '</div>' +
-      '<div class="launchStatus" style="background:' + launchStatusColor(l.status) + '22; color:' + launchStatusColor(l.status) + '">' + escapeHtml(l.status || "") + '</div>' +
-    '</div>' +
-    '<div class="launchWhen">' + escapeHtml(launchWhenText(l)) + '<span class="ldCountdownInline">' + escapeHtml(countdownText(l)) + '</span></div>' +
-    '<div class="launchMeta">' + escapeHtml([l.rocket, l.pad].filter(Boolean).join("  ·  ")) + '</div>' +
-    (l.desc ? '<div class="launchDesc">' + escapeHtml(l.desc) + '</div>' : '') +
-    '<div class="tapHint">Tap for full details ›</div>';
-}
-
-function renderLaunches(){
-  for (let i = 0; i < 2; i++){
-    const box = el("launchBox" + i);
-    const l = state.launches[i];
-    if (!l){
-      box.innerHTML = i === 0 ? '<div class="placeholder">' + state.launchError + '</div>' : '';
-      box.style.display = i === 0 ? "" : "none";
-      box.onclick = null;
-      continue;
-    }
-    box.style.display = "";
-    box.innerHTML = launchBoxHtml(l);
-    box.onclick = () => openLaunchModal(i);
-  }
-}
-
-function openLaunchModal(idx){
-  const l = state.launches[idx];
-  if (!l) return;
-  el("ldMission").textContent = l.mission || "Unnamed mission";
-  el("ldWho").textContent = [l.provider, l.rocket, l.pad].filter(Boolean).join("  ·  ");
-  el("ldWhen").textContent = launchWhenText(l) + countdownText(l);
-  el("ldOrbit").textContent = l.orbit ? ("Orbit: " + l.orbit) : "";
-  el("ldDesc").textContent = l.desc || "No description available.";
-  el("launchModal").classList.add("open");
-  state.detailsOpenIdx = idx;
-}
-function closeLaunchModal(){ el("launchModal").classList.remove("open"); state.detailsOpenIdx = -1; }
-el("launchClose").addEventListener("click", closeLaunchModal);
-el("launchModal").addEventListener("click", (e) => { if (e.target.id === "launchModal") closeLaunchModal(); });
-
-function escapeHtml(s){
-  return String(s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
-}
-
-/* =====================================================================
-   LIVE DATA: solar activity (NOAA SWPC) + advisory outlook text
-   ===================================================================== */
-async function fetchSolar(){
-  const results = await Promise.allSettled([
-    fetch("https://services.swpc.noaa.gov/products/noaa-scales.json", { cache: "no-store" }).then((r) => r.json()),
-    fetch("https://services.swpc.noaa.gov/json/goes/primary/xray-flares-latest.json", { cache: "no-store" }).then((r) => r.json()),
-  ]);
-
-  const [scalesR, xrayR] = results;
-  if (scalesR.status === "fulfilled"){
-    // Entry "0" is today's NOAA scales (G/S/R), each with a Scale (0-5) + Text.
-    const today = scalesR.value && scalesR.value["0"];
-    const g = today && today.G;
-    if (g){ state.solar.gscale = g.Scale; state.solar.gscaleText = g.Text; }
-  }
-  if (xrayR.status === "fulfilled"){
-    const arr = xrayR.value;
-    const entry = Array.isArray(arr) ? arr[0] : arr;
-    if (entry && entry.current_class) state.solar.xrayClass = entry.current_class;
-  }
-  state.solar.loaded = true;
-  renderSolar();
-}
-
-function renderSolar(){
-  const s = state.solar;
-  const gEl = el("gscaleVal");
-  if (s.gscale == null) gEl.textContent = s.loaded ? "unavailable" : "loading…";
-  else gEl.textContent = (s.gscale === "0" || s.gscale === 0) ? "None" : ("G" + s.gscale + (s.gscaleText ? " (" + s.gscaleText + ")" : ""));
-
-  const xEl = el("xrayVal");
-  xEl.textContent = s.xrayClass || (s.loaded ? "unavailable" : "loading…");
-}
-
-/* Ocean Conditions — live sea-surface temp / wave height / wind for the
-   nearshore Atlantic water off Stuart/Jensen Beach, FL (27.19N, -80.15W).
-   Needs a connection (unlike the offline tide prediction above), so every
-   field falls back to "unavailable" rather than breaking anything else. */
-const OCEAN_LAT = 27.19, OCEAN_LON = -80.15;
-function degToCompass(deg){
-  const dirs = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
-  return dirs[Math.round(deg / 22.5) % 16];
-}
-async function fetchOcean(){
-  const results = await Promise.allSettled([
-    fetch("https://marine-api.open-meteo.com/v1/marine?latitude=" + OCEAN_LAT + "&longitude=" + OCEAN_LON +
-      "&current=wave_height,sea_surface_temperature", { cache: "no-store" }).then((r) => r.json()),
-    fetch("https://api.open-meteo.com/v1/forecast?latitude=" + OCEAN_LAT + "&longitude=" + OCEAN_LON +
-      "&current=wind_speed_10m,wind_direction_10m&wind_speed_unit=mph", { cache: "no-store" }).then((r) => r.json()),
-  ]);
-  const [marineR, windR] = results;
-  if (marineR.status === "fulfilled" && marineR.value && marineR.value.current){
-    const c = marineR.value.current;
-    if (typeof c.sea_surface_temperature === "number") state.ocean.waterTempF = c.sea_surface_temperature * 9/5 + 32;
-    if (typeof c.wave_height === "number") state.ocean.seasFt = c.wave_height * 3.28084;
-  }
-  if (windR.status === "fulfilled" && windR.value && windR.value.current){
-    const c = windR.value.current;
-    if (typeof c.wind_speed_10m === "number") state.ocean.windMph = c.wind_speed_10m;
-    if (typeof c.wind_direction_10m === "number") state.ocean.windDirDeg = c.wind_direction_10m;
-  }
-  state.ocean.loaded = true;
-  renderOcean();
-}
-function renderOcean(){
-  const o = state.ocean;
-  el("oceanTempVal").textContent = (o.waterTempF != null) ? o.waterTempF.toFixed(0) + "°F" : (o.loaded ? "unavailable" : "loading…");
-  el("oceanSeasVal").textContent = (o.seasFt != null) ? o.seasFt.toFixed(1) + " ft" : (o.loaded ? "unavailable" : "loading…");
-  if (o.windMph != null && o.windDirDeg != null) el("oceanWindVal").textContent = Math.round(o.windMph) + " mph " + degToCompass(o.windDirDeg);
-  else el("oceanWindVal").textContent = o.loaded ? "unavailable" : "loading…";
-}
-
-/* Small Point, ME Ocean Conditions -- same idea as the Jensen Beach box above
-   (Open-Meteo for water temp/seas/wind), plus a real tide prediction for this
-   one instead of an offline harmonic model: NOAA's own CO-OPS API already
-   computes predictions server-side for any station, including subordinate
-   ones, so there's no need to re-derive a harmonic fit for a second, much
-   farther-away coastline. Needs a connection either way, like the rest of
-   this box. */
-const SMALLPOINT_LAT = 43.76, SMALLPOINT_LON = -69.82; // open water just off Small Point/Hermit Island, Phippsburg, ME
-const SMALLPOINT_TIDE_STATION = "8417221"; // NOAA CO-OPS subordinate station "Phippsburg, ME" -- nearest listed tide station to Small Point
-
-function noaaDateStr(d){
-  return "" + d.getFullYear() + String(d.getMonth()+1).padStart(2,"0") + String(d.getDate()).padStart(2,"0");
-}
-function parseNoaaLocalTime(t){
-  // NOAA returns "YYYY-MM-DD HH:MM" in the station's own local wall-clock time
-  // (time_zone=lst_ldt below) -- Phippsburg, ME and Jensen Beach, FL share the
-  // same US time zone, so this reads the same way local times are handled
-  // elsewhere on this page.
-  const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})$/.exec(t);
-  if (!m) return null;
-  return new Date(+m[1], +m[2]-1, +m[3], +m[4], +m[5]).getTime() / 1000;
-}
-
-async function fetchOceanME(){
-  const now = new Date();
-  const begin = noaaDateStr(now);
-  const end = noaaDateStr(new Date(now.getTime() + 2 * 86400000));
-  const results = await Promise.allSettled([
-    fetch("https://marine-api.open-meteo.com/v1/marine?latitude=" + SMALLPOINT_LAT + "&longitude=" + SMALLPOINT_LON +
-      "&current=wave_height,sea_surface_temperature", { cache: "no-store" }).then((r) => r.json()),
-    fetch("https://api.open-meteo.com/v1/forecast?latitude=" + SMALLPOINT_LAT + "&longitude=" + SMALLPOINT_LON +
-      "&current=wind_speed_10m,wind_direction_10m,temperature_2m&wind_speed_unit=mph&temperature_unit=fahrenheit",
-      { cache: "no-store" }).then((r) => r.json()),
-    fetch("https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?begin_date=" + begin + "&end_date=" + end +
-      "&station=" + SMALLPOINT_TIDE_STATION + "&product=predictions&datum=MLLW&time_zone=lst_ldt&units=english&interval=hilo&format=json",
-      { cache: "no-store" }).then((r) => r.json()),
-  ]);
-  const [marineR, windR, tideR] = results;
-  if (marineR.status === "fulfilled" && marineR.value && marineR.value.current){
-    const c = marineR.value.current;
-    if (typeof c.sea_surface_temperature === "number") state.oceanME.waterTempF = c.sea_surface_temperature * 9/5 + 32;
-    if (typeof c.wave_height === "number") state.oceanME.seasFt = c.wave_height * 3.28084;
-  }
-  if (windR.status === "fulfilled" && windR.value && windR.value.current){
-    const c = windR.value.current;
-    if (typeof c.wind_speed_10m === "number") state.oceanME.windMph = c.wind_speed_10m;
-    if (typeof c.wind_direction_10m === "number") state.oceanME.windDirDeg = c.wind_direction_10m;
-    if (typeof c.temperature_2m === "number") state.oceanME.airTempF = c.temperature_2m;
-  }
-  if (tideR.status === "fulfilled" && tideR.value && Array.isArray(tideR.value.predictions)){
-    const nowSec = Math.floor(Date.now() / 1000);
-    let nextHigh = null, nextLow = null;
-    for (const p of tideR.value.predictions){
-      const sec = parseNoaaLocalTime(p.t);
-      if (sec == null || sec < nowSec) continue;
-      if (p.type === "H" && !nextHigh) nextHigh = { sec, height: parseFloat(p.v) };
-      if (p.type === "L" && !nextLow) nextLow = { sec, height: parseFloat(p.v) };
-      if (nextHigh && nextLow) break;
-    }
-    state.oceanME.tideHigh = nextHigh;
-    state.oceanME.tideLow = nextLow;
-  }
-  state.oceanME.loaded = true;
-  renderOceanME();
-}
-
-function renderOceanME(){
-  const o = state.oceanME;
-  const fmtTide = (ev) => ev
-    ? new Date(ev.sec * 1000).toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" }) + " (" + ev.height.toFixed(1) + " ft)"
-    : (o.loaded ? "unavailable" : "loading…");
-  el("tideHighValME").textContent = fmtTide(o.tideHigh);
-  el("tideLowValME").textContent = fmtTide(o.tideLow);
-  el("oceanTempValME").textContent = (o.waterTempF != null) ? o.waterTempF.toFixed(0) + "°F" : (o.loaded ? "unavailable" : "loading…");
-  el("airTempValME").textContent = (o.airTempF != null) ? o.airTempF.toFixed(0) + "°F" : (o.loaded ? "unavailable" : "loading…");
-  el("oceanSeasValME").textContent = (o.seasFt != null) ? o.seasFt.toFixed(1) + " ft" : (o.loaded ? "unavailable" : "loading…");
-  if (o.windMph != null && o.windDirDeg != null) el("oceanWindValME").textContent = Math.round(o.windMph) + " mph " + degToCompass(o.windDirDeg);
-  else el("oceanWindValME").textContent = o.loaded ? "unavailable" : "loading…";
-}
-
-async function toggleOutlook(){
-  const box = el("outlookBox");
-  const toggle = el("outlookToggle");
-  if (state.outlook.open){
-    state.outlook.open = false;
-    box.style.display = "none";
-    toggle.innerHTML = "NOAA Space Weather Advisory Outlook &#9662;";
-    return;
-  }
-  state.outlook.open = true;
-  toggle.innerHTML = "NOAA Space Weather Advisory Outlook &#9652;";
-  box.style.display = "block";
-  if (state.outlook.loaded){ return; }
-  box.textContent = "Loading…";
-  try {
-    const res = await fetch("https://services.swpc.noaa.gov/text/advisory-outlook.txt", { cache: "no-store" });
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    const text = await res.text();
-    state.outlook.text = text;
-    state.outlook.loaded = true;
-    box.textContent = text;
-  } catch (e) {
-    box.innerHTML = 'Could not load the outlook here. You can read it directly at ' +
-      '<a href="https://services.swpc.noaa.gov/text/advisory-outlook.txt" target="_blank" rel="noopener">services.swpc.noaa.gov</a>.';
-  }
-}
-el("outlookToggle").addEventListener("click", toggleOutlook);
-
-/* =====================================================================
-   DRAWING: sky map + moon phase icon
-   ===================================================================== */
-const canvas = el("skyCanvas");
-const ctx = canvas.getContext("2d");
-const phaseCanvas = el("phaseCanvas");
-const phaseCtx = phaseCanvas.getContext("2d");
-
-function drawMoonDisc(g, cx, cy, r, A, lit, dark){
-  g.fillStyle = dark;
-  g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
-  const c = cosd(A);
-  g.fillStyle = lit;
-  for (let dy = -r; dy <= r; dy++){
-    const w = Math.sqrt(Math.max(0, r*r - dy*dy));
-    let x1, x2;
-    if (A < 180) { x1 = w * c; x2 = w; } else { x1 = -w; x2 = -w * c; }
-    if (x2 >= x1) g.fillRect(cx + x1, cy + dy, Math.max(1, x2 - x1), 1);
-  }
-}
-
-function drawLabel(g, text, x, y, color, canvasW, fontPx){
-  g.font = fontPx + "px -apple-system, sans-serif";
-  g.fillStyle = color;
-  const w = g.measureText(text).width;
-  const pad = fontPx * 0.5;
-  if (x + pad + w <= canvasW - 4){ g.textAlign = "left"; g.fillText(text, x + pad, y + fontPx * 0.3); }
-  else { g.textAlign = "right"; g.fillText(text, x - pad, y + fontPx * 0.3); }
-}
-
-function drawCompass(g, cx, cy, r, fontPx){
-  g.strokeStyle = "rgba(180,185,200,0.5)"; g.lineWidth = Math.max(1, r * 0.03);
-  g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
-  // The red/gray arrow always points "up" (the top of the map, i.e. whichever
-  // direction is currently being faced) -- the N/E/S/W labels below rotate around
-  // it to say what that direction actually is, same as the sky map itself does.
-  g.fillStyle = "#ff5a5a";
-  g.beginPath(); g.moveTo(cx, cy - r*0.9); g.lineTo(cx - r*0.35, cy); g.lineTo(cx + r*0.35, cy); g.closePath(); g.fill();
-  g.fillStyle = "rgba(180,185,200,0.6)";
-  g.beginPath(); g.moveTo(cx, cy + r*0.9); g.lineTo(cx - r*0.35, cy); g.lineTo(cx + r*0.35, cy); g.closePath(); g.fill();
-  g.font = fontPx + "px -apple-system, sans-serif";
-  g.textAlign = "center";
-  g.textBaseline = "middle";
-  const labelR = r * 1.72;
-  for (const [label, dirAz] of [["N", 0], ["E", 90], ["S", 180], ["W", 270]]){
-    const th = (dirAz - state.view.az) * RAD;
-    g.fillStyle = (label === "E") ? "#ff5a5a" : "rgba(180,185,200,0.8)";
-    g.fillText(label, cx + labelR * Math.sin(th), cy - labelR * Math.cos(th));
-  }
-  g.textBaseline = "alphabetic"; // restore the canvas default for every draw call after this one
-}
-
-/* =====================================================================
-   LIVE COMPASS -- rotate the sky map to match the direction you're
-   physically facing, read from the phone's magnetometer/orientation
-   sensor. Entirely local to the device (no network needed), but it does
-   need the sensor itself, plus (on iOS) an explicit tap-triggered
-   permission grant, so it's opt-in via the "Face" button rather than on
-   by default. The two rotate buttons work either way: with the compass
-   off they directly spin the map; with it on they nudge/correct the
-   live heading (handy if the sensor reads a few degrees off).
-   ===================================================================== */
-const FL_MAGNETIC_DECLINATION = -6.5; // approx degrees (west) for FL's Atlantic coast, 2026 -- would need updating for other locations
-let compassGotFix = false;
-
-function nudgeView(deltaDeg){
-  if (state.view.compassOn) state.view.nudge = rev(state.view.nudge + deltaDeg);
-  else state.view.az = rev(state.view.az + deltaDeg);
-}
-
-function onDeviceOrientation(e){
-  const hadFix = compassGotFix;
-  // iOS Safari supplies this directly, already corrected to true north.
-  if (typeof e.webkitCompassHeading === "number" && !isNaN(e.webkitCompassHeading)){
-    compassGotFix = true;
-    state.view.az = rev(e.webkitCompassHeading + state.view.nudge);
-    if (!hadFix) renderCompassToggle(); // clear any earlier "no signal" note now that a fix arrived
-    return;
-  }
-  // Other browsers (mainly Android/Chrome): only trust an *absolute* reading --
-  // a plain relative 'deviceorientation' alpha drifts and isn't tied to north at
-  // all. alpha counts counter-clockwise from magnetic north, so flip it to a
-  // clockwise compass heading, then apply a fixed local declination estimate to
-  // approximate true north.
-  if (e.absolute === true && typeof e.alpha === "number" && !isNaN(e.alpha)){
-    compassGotFix = true;
-    const magneticHeading = rev(360 - e.alpha);
-    state.view.az = rev(magneticHeading + FL_MAGNETIC_DECLINATION + state.view.nudge);
-    if (!hadFix) renderCompassToggle();
-  }
-}
-
-async function enableCompass(){
-  if (typeof DeviceOrientationEvent === "undefined"){
-    alert("This browser doesn't support compass heading.");
-    return;
-  }
-  if (typeof DeviceOrientationEvent.requestPermission === "function"){
-    try {
-      const result = await DeviceOrientationEvent.requestPermission();
-      if (result !== "granted"){ alert("Compass permission was denied."); return; }
-    } catch (err){ alert("Couldn't get compass permission."); return; }
-  }
-  compassGotFix = false;
-  state.view.nudge = 0;
-  window.addEventListener("deviceorientationabsolute", onDeviceOrientation);
-  window.addEventListener("deviceorientation", onDeviceOrientation);
-  state.view.compassOn = true;
-  renderCompassToggle();
-  setTimeout(() => {
-    if (state.view.compassOn && !compassGotFix) renderCompassToggle("no signal");
-  }, 3000);
-}
-
-function disableCompass(){
-  window.removeEventListener("deviceorientationabsolute", onDeviceOrientation);
-  window.removeEventListener("deviceorientation", onDeviceOrientation);
-  state.view.compassOn = false;
-  renderCompassToggle();
-}
-
-function renderCompassToggle(note){
-  const btn = el("compassToggleBtn");
-  btn.textContent = "\u{1F9ED} Face: " + (state.view.compassOn ? "On" + (note ? " (" + note + ")" : "") : "Off");
-  btn.classList.toggle("on", state.view.compassOn);
-}
-
-function drawSky(now){
-  if (state.lat == null) return;
-  const W = canvas.width, H = canvas.height;
-  const mapCx = W/2, mapCy = H/2, mapR = Math.min(W,H) * 0.42;
-  // Every dot/icon/font size below is defined relative to mapR (not a fixed pixel
-  // count) so the map reads the same size whether it's drawn on a small, low-DPI
-  // screen or a large, high-DPI phone screen (iPhones report devicePixelRatio 2-3,
-  // which otherwise makes fixed-pixel drawing look tiny relative to the map).
-  const sc = mapR / 130;
-  const labelFont = Math.max(11, Math.round(13 * sc));
-
-  state.mapObjects = [];   // rebuilt below; tapping the map hit-tests against this
-
-  const sunH = sunAltAz(now, state.lat, state.lon);
-  const moon = moonAt(now, state.lat, state.lon);
-
-  let skyColor, stateText, stateColor;
-  if (sunH.alt > 0){ skyColor = "rgb(25,55,110)"; stateText = "Daylight"; stateColor = "rgb(120,170,255)"; }
-  else if (sunH.alt > -12){ skyColor = "rgb(14,24,60)"; stateText = "Twilight"; stateColor = "rgb(150,150,225)"; }
-  else { skyColor = "rgb(4,4,20)"; stateText = "Night"; stateColor = "rgb(130,130,160)"; }
-  el("stateBadge").textContent = stateText;
-  el("stateBadge").style.color = stateColor;
-
-  ctx.clearRect(0, 0, W, H);
-
-  // Sky disc + altitude rings
-  ctx.beginPath(); ctx.arc(mapCx, mapCy, mapR, 0, Math.PI*2); ctx.fillStyle = skyColor; ctx.fill();
-  ctx.strokeStyle = "rgba(80,85,110,0.5)"; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.arc(mapCx, mapCy, mapR*2/3, 0, Math.PI*2); ctx.stroke();
-  ctx.beginPath(); ctx.arc(mapCx, mapCy, mapR*1/3, 0, Math.PI*2); ctx.stroke();
-  ctx.strokeStyle = "rgba(150,150,170,0.7)";
-  ctx.beginPath(); ctx.arc(mapCx, mapCy, mapR, 0, Math.PI*2); ctx.stroke();
-
-  function toPx(u){ return { x: mapCx + u.x * mapR, y: mapCy + u.y * mapR }; }
-
-  // Milky Way (recomputed every 30s while dark enough to matter)
-  const showMw = sunH.alt < -12;
-  if (showMw){
-    if (!state.mw || now - state.mwCalcAt > 30){
-      state.mw = computeMilkyWay(now, state.lat, state.lon);
-      state.mwCalcAt = now;
-    }
-    let f = 0.95;
-    const dark = Math.max(0, Math.min(1, (-12 - sunH.alt) / 6));
-    f *= dark;
-    if (moon.alt > 0){
-      const s0 = sunAt(dayNumber(now));
-      const litFrac = (1 - cosd(rev(moon.lon - s0.lon))) / 2;
-      f *= 1 - 0.7 * litFrac;
-    }
-    for (const pt of state.mw){
-      const u = plotUnit(pt.alt, pt.az);
-      if (!u) continue;
-      const p = toPx(u);
-      const k = pt.level * f;
-      ctx.fillStyle = "rgba(205,205,235," + Math.min(1, k).toFixed(2) + ")";
-      const mwSize = 3.0 * sc;
-      ctx.fillRect(p.x - mwSize/2, p.y - mwSize/2, mwSize, mwSize);
-    }
-  }
-
-  // Stars
-  if (sunH.alt < -6){
-    const lst = localSiderealTime(now, state.lon);
-    for (const s of STARS){
-      const h = equatorialToHorizon(s.raH * 15, s.dec, lst, state.lat);
-      if (h.alt <= 0) continue;
-      const u = plotUnit(h.alt, h.az);
-      if (!u) continue;
-      const p = toPx(u);
-      ctx.fillStyle = s.mag < 0.5 ? "#ffffff" : "rgba(210,210,220,0.85)";
-      const starR = (s.mag < 0.5 ? 2.0 : 1.4) * sc;
-      ctx.beginPath(); ctx.arc(p.x, p.y, starR, 0, Math.PI*2); ctx.fill();
-      drawLabel(ctx, s.name, p.x, p.y, "rgba(150,150,175,0.85)", W, labelFont);
-      state.mapObjects.push({ x: p.x, y: p.y, r: Math.max(9 * sc, starR + 6), name: s.name, desc: s.desc });
-    }
-
-    // A few well-known constellation outlines (faint connecting lines + unlabeled
-    // member stars), so the map reads as a sky chart rather than just loose dots.
-    for (const c of CONSTELLATIONS){
-      const pts = c.stars.map((st) => {
-        const h = equatorialToHorizon(st.raH * 15, st.dec, lst, state.lat);
-        if (h.alt <= 0) return null;
-        const u = plotUnit(h.alt, h.az);
-        return u ? toPx(u) : null;
-      });
-      ctx.strokeStyle = "rgba(150,160,195,0.4)";
-      ctx.lineWidth = Math.max(1, sc * 0.6);
-      for (const [a, b] of c.lines){
-        if (pts[a] && pts[b]){
-          ctx.beginPath(); ctx.moveTo(pts[a].x, pts[a].y); ctx.lineTo(pts[b].x, pts[b].y); ctx.stroke();
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script>
+        const canvas = document.getElementById('radarCanvas');
+        const ctx = canvas.getContext('2d');
+        const container = canvas.parentElement;
+        const aircraftListDiv = document.getElementById('aircraftList');
+        // Store METAR data for modal
+        let ksuaMetarData = null;
+        let ksuaWeatherLink = 'https://aviationweather.gov/data/metar/?decoded=1&ids=KSUA';
+        const detailModal = document.getElementById('detailModal');
+        const airportModal = document.getElementById('airportModal');
+        const statusDiv = document.getElementById('radarStatus');
+        const locationStatus = document.getElementById('locationStatus');
+        const ksuaWeatherUrl = 'https://aviationweather.gov/data/metar/?decoded=1&ids=KSUA&taf=1';
+
+        let USER_LAT = 27.248805;
+        let USER_LON = -80.259035;
+        const RADIUS_MILES = 50;
+        const NM_TO_MILES = 1.15078; // Convert nautical miles to statute miles
+
+        // Aircraft tracking
+        const TRACKED_AIRCRAFT = 'N42675';
+        const NTFY_URL = 'https://ntfy.sh/n42675';
+        let notifiedAircraft = {}; // Track which aircraft we've already notified about
+
+        // Vercel backend proxy URL - replace with your Vercel project URL
+        const BACKEND_URL = 'https://local-aviation.vercel.app/api/proxy?url=';
+        const IS_CONFIGURED = BACKEND_URL.includes('YOUR_VERCEL_PROJECT') === false;
+
+        const AIRPORTS = [
+            { code: 'SUA', name: 'Witham Field', lat: 27.1817, lon: -80.2211, runways: '09/27' },
+            { code: 'KFPR', name: 'Treasure Coast Intl', lat: 27.495, lon: -80.368, runways: '09/27, 18/36' },
+            { code: 'OBK', name: 'Okeechobee County', lat: 27.266, lon: -80.851, runways: '09/27' },
+            { code: 'VRB', name: 'Vero Beach Regional', lat: 27.656, lon: -80.418, runways: '09/27, 16/34' },
+            { code: 'PBI', name: 'Palm Beach Intl', lat: 26.683, lon: -80.096, runways: '09L/27R, 09R/27L' },
+            { code: 'BCT', name: 'Boca Raton', lat: 26.379, lon: -80.108, runways: '09/27' },
+        ];
+
+        // Aircraft sitting on the ground longer than this are dropped from the list and map
+        const GROUND_HIDE_MS = 60 * 1000;
+        const groundSince = {};   // icao hex -> time we first saw it on the ground
+
+        // KSUA weather (wind, temperature, dew point) comes from its METAR
+        const WIND_STATION = 'KSUA';
+        const WIND_ARROW_POINTS_DOWNWIND = true;  // true = arrow points where the wind is blowing TO
+
+        // Airways drawn in grey on the map (fix-to-fix positions from the FAA's published airway data).
+        // Each list is [latitude, longitude] pairs, in order along the route.
+        const AIRWAYS = {
+            'V3': [
+                [25.800, -80.349], [25.871, -80.301], [25.943, -80.254], [26.014, -80.206], [26.074, -80.166],
+                [26.157, -80.156], [26.239, -80.145], [26.322, -80.134], [26.405, -80.123], [26.488, -80.112],
+                [26.570, -80.101], [26.653, -80.090], [26.680, -80.086],
+                [26.759, -80.118], [26.837, -80.149], [26.915, -80.181], [26.960, -80.199],
+                [27.039, -80.230], [27.117, -80.262], [27.193, -80.293],
+                [27.272, -80.322], [27.351, -80.352], [27.430, -80.381], [27.509, -80.411], [27.588, -80.440],
+                [27.667, -80.470], [27.746, -80.500], [27.825, -80.529], [27.904, -80.559], [27.983, -80.589],
+                [28.062, -80.619], [28.105, -80.635],
+                [28.184, -80.666], [28.263, -80.697], [28.341, -80.729], [28.420, -80.760], [28.435, -80.765],
+                [28.513, -80.797], [28.517, -80.798]
+            ],
+            'V492': [
+                [26.680, -80.086], [26.763, -80.093], [26.846, -80.099], [26.929, -80.106], [26.992, -80.111],
+                [27.075, -80.117], [27.158, -80.124], [27.241, -80.130], [27.253, -80.131],
+                [27.336, -80.138], [27.419, -80.145], [27.468, -80.148],
+                [27.537, -80.201], [27.606, -80.253], [27.608, -80.255],
+                [27.677, -80.307], [27.746, -80.360], [27.815, -80.413], [27.884, -80.465], [27.953, -80.518],
+                [28.022, -80.571], [28.091, -80.624], [28.105, -80.635]
+            ]
+        };
+
+        let aircraft = [];
+        let hoveredAircraft = null;
+        let map = null;
+        let airportMarkers = [];
+
+        function getGeolocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition((pos) => {
+                    document.getElementById('latInput').value = pos.coords.latitude.toFixed(4);
+                    document.getElementById('lonInput').value = pos.coords.longitude.toFixed(4);
+                    updateLocation();
+                    locationStatus.textContent = '✓ Location detected';
+                });
+            }
         }
-      }
-      ctx.fillStyle = "rgba(210,215,235,0.8)";
-      for (const p of pts){
-        if (!p) continue;
-        ctx.beginPath(); ctx.arc(p.x, p.y, 1.3 * sc, 0, Math.PI*2); ctx.fill();
-      }
-      const anchor = pts[c.anchor];
-      if (anchor){
-        ctx.font = Math.round(labelFont * 0.85) + "px -apple-system, sans-serif";
-        ctx.fillStyle = "rgba(155,165,200,0.75)";
-        ctx.textAlign = "center";
-        const labelY = anchor.y - 11 * sc;
-        ctx.fillText(c.name, anchor.x, labelY);
-        state.mapObjects.push({ x: anchor.x, y: labelY, r: 16 * sc, name: c.name, desc: c.desc });
-      }
-    }
-  }
 
-  // Planets
-  for (let i = 0; i < PLANETS.length; i++){
-    const h = planetAltAz(i, now, state.lat, state.lon);
-    if (h.alt <= 0) continue;
-    const u = plotUnit(h.alt, h.az);
-    if (!u) continue;
-    const p = toPx(u);
-    ctx.fillStyle = PLANETS[i].color;
-    ctx.beginPath(); ctx.arc(p.x, p.y, 4.5 * sc, 0, Math.PI*2); ctx.fill();
-    drawLabel(ctx, PLANETS[i].name, p.x, p.y, PLANETS[i].color, W, labelFont);
-    state.mapObjects.push({ x: p.x, y: p.y, r: 14 * sc, name: PLANETS[i].name, desc: PLANETS[i].desc });
-  }
+        function updateLocation() {
+            const lat = parseFloat(document.getElementById('latInput').value);
+            const lon = parseFloat(document.getElementById('lonInput').value);
 
-  // ISS
-  if (state.iss.valid){
-    const h = issAltAz(state.lat, state.lon, state.iss.lat, state.iss.lon, state.iss.heightKm);
-    if (h.alt > 0){
-      const u = plotUnit(h.alt, h.az);
-      if (u){
-        const p = toPx(u);
-        const c = state.iss.sunlit ? "#5be0ff" : "rgb(0,110,110)";
-        ctx.fillStyle = c;
-        const issSize = 8 * sc;
-        ctx.fillRect(p.x - issSize/2, p.y - issSize/2, issSize, issSize);
-        drawLabel(ctx, "ISS", p.x, p.y, c, W, labelFont);
-        state.mapObjects.push({ x: p.x, y: p.y, r: 14 * sc, name: "ISS", desc: ISS_DESC });
-      }
-    }
-  }
+            if (isNaN(lat) || isNaN(lon)) {
+                locationStatus.textContent = '✗ Invalid coordinates';
+                return;
+            }
 
-  // Moon
-  if (moon.alt > -0.5){
-    const u = plotUnit(moon.alt, moon.az);
-    if (u){
-      const p = toPx(u);
-      const s0 = sunAt(dayNumber(now));
-      drawMoonDisc(ctx, p.x, p.y, 11 * sc, rev(moon.lon - s0.lon), "#ebebe1", "#37373f");
-      drawLabel(ctx, "Moon", p.x + 11*sc, p.y, "#ebebe1", W, labelFont);
-      state.mapObjects.push({ x: p.x, y: p.y, r: 16 * sc, name: "Moon", desc: MOON_DESC });
-    }
-  }
+            USER_LAT = lat;
+            USER_LON = lon;
+            locationStatus.textContent = `✓ ${lat.toFixed(4)}, ${lon.toFixed(4)}`;
 
-  // Sun
-  if (sunH.alt > -0.5){
-    const u = plotUnit(sunH.alt, sunH.az);
-    if (u){
-      const p = toPx(u);
-      ctx.fillStyle = "#ffd23f";
-      ctx.beginPath(); ctx.arc(p.x, p.y, 9.5 * sc, 0, Math.PI*2); ctx.fill();
-      drawLabel(ctx, "Sun", p.x + 9.5*sc, p.y, "#ffd23f", W, labelFont);
-      state.mapObjects.push({ x: p.x, y: p.y, r: 16 * sc, name: "Sun", desc: SUN_DESC });
-    }
-  }
+            if (map) {
+                map.setView([USER_LAT, USER_LON], 9);
+                updateAirportMarkers();
+            }
 
-  drawCompass(ctx, mapR * 0.28 + 10, H - mapR * 0.28 - 10, mapR * 0.16, labelFont);
-
-  ctx.fillStyle = "rgba(120,120,145,0.85)";
-  ctx.font = labelFont + "px -apple-system, sans-serif";
-  ctx.textAlign = "left";
-  ctx.fillText("center = overhead", 10, labelFont + 4);
-  // Stacked under the line above (top-left) rather than bottom-right, so it stays
-  // clear of the Face/rotate button bar docked along the bottom of the map. Split
-  // across two short lines rather than one long one, so neither line's text runs
-  // far enough right to touch the sky disc.
-  const hintFont = Math.max(9, Math.round(labelFont * 0.8));
-  const lineGap = hintFont + 4;
-  ctx.font = hintFont + "px -apple-system, sans-serif";
-  ctx.fillText("Click on celestial object", 10, labelFont + 4 + lineGap);
-  ctx.fillText("for more detail", 10, labelFont + 4 + lineGap * 2);
-}
-
-// Tap/click any object drawn on the map (Sun, Moon, planet, star, constellation)
-// to see a short description. state.mapObjects is rebuilt fresh every drawSky() call.
-function findTappedObject(clientX, clientY){
-  const rect = canvas.getBoundingClientRect();
-  const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
-  const x = (clientX - rect.left) * scaleX, y = (clientY - rect.top) * scaleY;
-  let best = null, bestD = Infinity;
-  for (const o of state.mapObjects){
-    const d = Math.hypot(o.x - x, o.y - y);
-    if (d <= o.r && d < bestD){ bestD = d; best = o; }
-  }
-  return best;
-}
-
-function openObjModal(o){
-  el("objName").textContent = o.name;
-  el("objDesc").textContent = o.desc || "No description available.";
-  el("objModal").classList.add("open");
-}
-function closeObjModal(){ el("objModal").classList.remove("open"); }
-el("objClose").addEventListener("click", closeObjModal);
-el("objModal").addEventListener("click", (e) => { if (e.target.id === "objModal") closeObjModal(); });
-canvas.addEventListener("click", (e) => {
-  const hit = findTappedObject(e.clientX, e.clientY);
-  if (hit) openObjModal(hit);
-});
-// The meteor-shower name re-renders on every tick, so the click handler is bound
-// once to the row (event delegation) and reads whatever is currently in
-// state.meteorShowerInfo rather than being re-attached on every render.
-el("meteorShower").addEventListener("click", (e) => {
-  if (e.target.classList.contains("name") && state.meteorShowerInfo){
-    openObjModal({ name: state.meteorShowerInfo.name, desc: state.meteorShowerInfo.desc });
-  }
-});
-
-function renderPanel(now){
-  if (!state.events) return;
-  const fmt = (t) => t ? new Date(t*1000).toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" }) : "none today";
-  el("sunRise").textContent = fmt(state.events.sunRise);
-  el("sunSet").textContent = fmt(state.events.sunSet);
-
-  if (state.events.nextFullMoon){
-    const fm = new Date(state.events.nextFullMoon * 1000);
-    const today = new Date(now * 1000);
-    const isToday = fm.getFullYear()===today.getFullYear() && fm.getMonth()===today.getMonth() && fm.getDate()===today.getDate();
-    el("fullMoon").textContent = isToday ? "Today" : fm.toLocaleDateString(undefined, { weekday:"short", month:"short", day:"numeric" });
-  } else {
-    el("fullMoon").textContent = "--";
-  }
-
-  const A = moonPhaseAngle(now, state.lat, state.lon);
-  const pct = Math.round((1 - cosd(A)) / 2 * 100);
-  el("phaseName").textContent = phaseName(A);
-  el("phasePct").textContent = pct + "% lit";
-  phaseCtx.clearRect(0,0,64,64);
-  drawMoonDisc(phaseCtx, 32, 32, 28, A, "#ebebe1", "#37373f");
-
-  const ms = nextMeteorShower(now);
-  if (ms){
-    const tip = meteorViewingTip(ms, ms.peakDate, state.lat, state.lon);
-    // So the click handler below has it, however long ago this render happened.
-    state.meteorShowerInfo = { name: ms.name, desc: ms.desc + (tip ? " " + tip : "") };
-    const days = Math.round((ms.peakDate.getTime() - now*1000) / 86400000);
-    const when = days <= 0 ? "peaking now" : days === 1 ? "peaks tomorrow" : "peaks in " + days + " days";
-    el("meteorShower").innerHTML = "Next meteor shower: <span class=\"name clickable\">" + escapeHtml(ms.name) + "</span>" +
-      " &mdash; active " + escapeHtml(ms.active) + " (" + when + ")";
-  }
-}
-
-/* =====================================================================
-   TIDE PREDICTION (fully offline)
-   -----------------------------------------------------------------------
-   Model: the water level at NOAA reference station 8723178 (Miami Beach,
-   Government Cut) = Z0 + sum(amp_i * cos(speed_i * hoursSinceUnixEpoch -
-   phase_i)). speed_i (deg/hr) are the exact, universal tidal-constituent
-   frequencies (physical constants, same ones NOAA itself uses). amp_i and
-   phase_i were fit once, offline, against several months of NOAA's own
-   published predictions for that reference station, so the result needs
-   no internet connection to reproduce.
-
-   NOAA's own published tide table for Stuart, FL (subordinate station
-   8722357, St. Lucie River — the closest official NOAA tide station to
-   Jensen Beach) is just this reference curve's high/low tide events,
-   shifted by a fixed, officially published offset (time + height ratio).
-   Applying that same offset here reproduces NOAA's Stuart table to within
-   roughly 5-15 minutes and 0.02 ft — verified against NOAA's actual data
-   both a few days out and several months further out.
-   ===================================================================== */
-const TIDE_Z0 = 1.2822627395922912;
-const TIDE_CONSTITUENTS = [
-  // name, speed (deg/hr), amplitude (ft), phase (rad)
-  ["M2", 28.9841042, 1.0983812404555364, -2.521026672364358],
-  ["S2", 30.0000000, 0.20649195343237614, 0.8846460671635633],
-  ["N2", 28.4397295, 0.2455033787789589, 1.6358279309216923],
-  ["K1", 15.0410686, 0.13502002172168884, -2.2069996658109394],
-  ["M4", 57.9682084, 0.056815857338554016, 2.73165534103168],
-  ["O1", 13.9430356, 0.12273460186196347, 2.1802139668767193],
-  ["MN4", 57.4238337, 0.029161042242227483, 0.9984505495864957],
-  ["NU2", 28.5125831, 0.03571914377255342, 2.1327237141145794],
-  ["MU2", 27.9682084, 0.04060982252331165, 0.9004460656630899],
-  ["2N2", 27.8953548, 0.027731793556426347, -0.6233134395536754],
-  ["Q1", 13.3986609, 0.02912592391824965, 0.3265530599584667],
-  ["T2", 29.9589333, 0.022019240483761936, 0.5024494377642318],
-  ["P1", 14.9589314, 0.03652284894564684, -1.860306031723158],
-  ["L2", 29.5284789, 0.05296265106189829, 2.0300518442031406],
-  ["K2", 30.0821373, 0.07118571323354488, -2.81107008915695],
-  ["MS4", 58.9841042, 0.029169735081620886, -0.09059903697045273],
-  ["SA", 0.0410686, 0.2893595332038534, -1.5447651570154184],
-  ["SSA", 0.0821373, 0.17344253726963677, -2.47816595046457],
-];
-// Official NOAA subordinate-station relationship: Stuart, FL vs. the
-// Miami Beach reference station above.
-const TIDE_STATION_OFFSET = { highMin: 133, highRatio: 0.40, lowMin: 210, lowRatio: 0.86 };
-
-function refTideHeight(unixSec){
-  const tHr = unixSec / 3600;
-  let h = TIDE_Z0;
-  for (let i = 0; i < TIDE_CONSTITUENTS.length; i++){
-    const c = TIDE_CONSTITUENTS[i];
-    h += c[2] * Math.cos(c[1] * Math.PI / 180 * tHr - c[3]);
-  }
-  return h;
-}
-
-// Scans forward from fromSec (unix seconds) for the next predicted high and
-// low tide at Stuart, applying the official time/height offset to each
-// reference-station extremum found.
-function nextTides(fromSec){
-  const stepSec = 60;
-  const scanStart = fromSec - 4 * 3600; // look slightly before "now" too, since
-  const scanEnd = fromSec + 3 * 86400;   // the Stuart offset shifts events later
-  let prev = refTideHeight(scanStart), prevSlope = null;
-  let nextHigh = null, nextLow = null;
-  for (let t = scanStart + stepSec; t <= scanEnd; t += stepSec){
-    const v = refTideHeight(t);
-    const slope = v - prev;
-    if (prevSlope !== null){
-      let type = null;
-      if (prevSlope > 0 && slope <= 0) type = "H";
-      else if (prevSlope < 0 && slope >= 0) type = "L";
-      if (type){
-        const offsetMin = type === "H" ? TIDE_STATION_OFFSET.highMin : TIDE_STATION_OFFSET.lowMin;
-        const ratio = type === "H" ? TIDE_STATION_OFFSET.highRatio : TIDE_STATION_OFFSET.lowRatio;
-        const stSec = (t - stepSec) + offsetMin * 60;
-        const stHeight = prev * ratio;
-        if (stSec >= fromSec){
-          if (type === "H" && !nextHigh) nextHigh = { sec: stSec, height: stHeight };
-          if (type === "L" && !nextLow) nextLow = { sec: stSec, height: stHeight };
+            updateAirportList();
+            drawRadar();
+            fetchAircraft();
         }
-      }
-    }
-    prevSlope = slope;
-    prev = v;
-    if (nextHigh && nextLow) break;
-  }
-  return { high: nextHigh, low: nextLow };
-}
 
-// Only re-runs the (cheap, but non-trivial) scan when the previously found
-// event has passed, rather than on every 1-second tick.
-function ensureTides(now){
-  const t = state.tides;
-  if (!t.high || !t.low || now >= t.high.sec || now >= t.low.sec){
-    state.tides = nextTides(now);
-  }
-}
+        function initMap() {
+            map = L.map('mapContainer').setView([USER_LAT, USER_LON], 9);
 
-function renderTides(){
-  const fmt = (ev) => {
-    if (!ev) return "--";
-    const d = new Date(ev.sec * 1000);
-    return d.toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" }) + " (" + ev.height.toFixed(1) + " ft)";
-  };
-  el("tideHighVal").textContent = fmt(state.tides.high);
-  el("tideLowVal").textContent = fmt(state.tides.low);
-}
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Esri',
+                maxZoom: 18
+            }).addTo(map);
 
-/* Next planet to rise -- of the 5 naked-eye planets currently BELOW the
-   horizon (already-risen ones don't count, since they're not "next"),
-   finds whichever one crosses alt=0 soonest. Fully offline, same
-   orbital-mechanics math already used to plot the planets on the map. */
-function nextPlanetRise(fromSec, lat, lon){
-  const stepSec = 300, horizon = fromSec + 3 * 86400; // scan up to 3 days ahead
-  let best = null;
-  for (let i = 0; i < PLANETS.length; i++){
-    let prev = planetAltAz(i, fromSec, lat, lon).alt;
-    if (prev > 0) continue; // already up right now -- not "next to rise"
-    for (let t = fromSec + stepSec; t <= horizon; t += stepSec){
-      const alt = planetAltAz(i, t, lat, lon).alt;
-      if (prev <= 0 && alt > 0){
-        let lo = t - stepSec, hi = t;
-        for (let k = 0; k < 10; k++){
-          const mid = lo + Math.floor((hi - lo) / 2);
-          if (planetAltAz(i, mid, lat, lon).alt > 0) hi = mid; else lo = mid;
+            // Add weather radar layer
+            initWeatherRadar();
+
+            L.circle([USER_LAT, USER_LON], {
+                radius: RADIUS_MILES * 1609.34, color: '#0066cc', fill: false, weight: 2, opacity: 0.5
+            }).addTo(map);
+
+            L.circleMarker([USER_LAT, USER_LON], {
+                radius: 6, color: '#0066cc', fill: true, fillColor: '#0066cc', weight: 2
+            }).addTo(map);
+
+            addAirways();
+
+            // Redraw canvas when map changes
+            map.on('zoom pan', drawRadar);
+
+            updateAirportMarkers();
         }
-        if (!best || hi < best.sec) best = { name: PLANETS[i].name, sec: hi };
-        break;
-      }
-      prev = alt;
-    }
-  }
-  return best;
-}
 
-// Same "only recompute once it's stale" approach as ensureTides() above.
-function ensureNextPlanet(now){
-  const n = state.nextPlanet;
-  if (!n.sec || now >= n.sec){
-    state.nextPlanet = nextPlanetRise(now, state.lat, state.lon) || { name: null, sec: null };
-  }
-}
+        // Draws each airway as a grey line (with a thin dark edge so it shows on the satellite picture).
+        // They are Leaflet map layers, so they move and zoom together with the map.
+        function addAirways() {
+            Object.keys(AIRWAYS).forEach(name => {
+                const pts = AIRWAYS[name];
+                L.polyline(pts, { color: '#000', weight: 6, opacity: 0.35, interactive: false }).addTo(map);
+                L.polyline(pts, { color: '#b0b0b0', weight: 3.5, opacity: 0.95, interactive: false }).addTo(map);
+                // Label near the middle of the route that is closest to home
+                let best = pts[0], bestD = 1e9;
+                pts.forEach(p => {
+                    const d = Math.hypot(p[0] - USER_LAT, (p[1] - USER_LON) * Math.cos(USER_LAT * Math.PI / 180));
+                    if (d < bestD) { bestD = d; best = p; }
+                });
+                L.tooltip({ permanent: true, direction: 'right', offset: [4, 0], className: 'airway-label' })
+                    .setLatLng(best).setContent(name).addTo(map);
+            });
+        }
 
-function renderNextPlanet(){
-  const n = state.nextPlanet;
-  const rowEl = el("nextPlanetRise");
-  if (!n.name || !n.sec){ rowEl.textContent = "All visible planets are already up"; return; }
-  const when = new Date(n.sec * 1000).toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" });
-  rowEl.innerHTML = "Next planet to rise: <span class=\"name\">" + escapeHtml(n.name) + "</span> &mdash; " + when;
-}
+        let radarLayer = null;
 
-// The Moon rises/sets about 50 min later each day, so a "today's moonrise" shown all
-// day (the way sunrise/sunset works above) often goes stale by evening, or is simply
-// missing some days. So moonrise/set instead always show the next one from THIS
-// moment on, and -- like ensureTides()/ensureNextPlanet() above -- only rescan once
-// the currently-shown event has actually passed, rather than on every 1-second tick.
-function ensureMoonEvents(now, lat, lon){
-  const m = state.moon;
-  if (!m.rise || now >= m.rise) m.rise = findNextMoonEvent(now, lat, lon, true);
-  if (!m.set || now >= m.set) m.set = findNextMoonEvent(now, lat, lon, false);
-}
+        function initWeatherRadar() {
+            // Weather radar disabled due to network restrictions
+            // RainViewer tiles require dynamic URL substitution which doesn't work through proxy
+            console.log('Weather radar: Network environment blocking tile access');
+        }
 
-function renderMoonEvents(now){
-  const fmtMoonEvent = (t) => {
-    if (!t) return "unavailable";
-    const d = new Date(t * 1000);
-    const today = new Date(now * 1000);
-    const isToday = d.getFullYear()===today.getFullYear() && d.getMonth()===today.getMonth() && d.getDate()===today.getDate();
-    const timeStr = d.toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" });
-    return isToday ? timeStr : timeStr + " " + d.toLocaleDateString(undefined, { weekday:"short" });
-  };
-  el("moonRise").textContent = fmtMoonEvent(state.moon.rise);
-  el("moonSet").textContent = fmtMoonEvent(state.moon.set);
-}
+        function updateAirportMarkers() {
+            airportMarkers.forEach(m => map.removeLayer(m));
+            airportMarkers = [];
 
-/* =====================================================================
-   MAIN LOOP
-   ===================================================================== */
-function fitCanvas(){
-  const size = canvas.getBoundingClientRect().width;
-  const dpr = window.devicePixelRatio || 1;
-  const px = Math.max(300, Math.round(size * dpr));
-  if (canvas.width !== px){ canvas.width = px; canvas.height = px; }
-}
-window.addEventListener("resize", fitCanvas);
+            AIRPORTS.forEach(ap => {
+                const marker = L.marker([ap.lat, ap.lon], { title: ap.code }).addTo(map);
+                marker.bindPopup(`<strong>${ap.code}</strong><br>${ap.name}`);
+                marker.on('click', () => showAirportDetail(ap.code));
+                airportMarkers.push(marker);
+            });
+        }
 
-let lastDaySeen = null;
+        function resizeCanvas() {
+            const rect = container.getBoundingClientRect();
+            const size = Math.min(rect.width, rect.height);
+            canvas.width = size;
+            canvas.height = size;
+            drawRadar();
+        }
 
-// e.g. "UTC-4" or "UTC+5:30". Reflects the browser's current offset, so it
-// updates on its own whenever Daylight Saving starts or ends.
-function utcOffsetLabel(d){
-  const totalMin = -d.getTimezoneOffset();
-  const sign = totalMin >= 0 ? "+" : "-";
-  const abs = Math.abs(totalMin);
-  const h = Math.floor(abs / 60), m = abs % 60;
-  return "UTC" + sign + h + (m ? ":" + String(m).padStart(2, "0") : "");
-}
+        function drawRadar() {
+            const size = canvas.width;
+            const centerX = size / 2;
+            const centerY = size / 2;
+            const pxPerMile = size / (RADIUS_MILES * 2);
 
-function tick(){
-  const now = Math.floor(Date.now() / 1000);
-  const d = new Date(now * 1000);
+            ctx.clearRect(0, 0, size, size);
 
-  el("clock").textContent = d.toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit", second:"2-digit" }) +
-    " (" + utcOffsetLabel(d) + ")";
-  el("dateLabel").textContent = d.toLocaleDateString(undefined, { weekday:"short", month:"short", day:"numeric" });
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.lineWidth = 1;
+            for (let i = 1; i <= 5; i++) {
+                const radius = (i * 10) * pxPerMile;
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+                ctx.stroke();
+            }
 
-  ensureTides(now);
-  renderTides();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+            ctx.lineWidth = 0.5;
+            for (let angle = 0; angle < 360; angle += 30) {
+                const rad = (angle - 90) * Math.PI / 180;
+                const x1 = centerX + Math.cos(rad) * (RADIUS_MILES * pxPerMile);
+                const y1 = centerY + Math.sin(rad) * (RADIUS_MILES * pxPerMile);
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.lineTo(x1, y1);
+                ctx.stroke();
+            }
 
-  if (state.lat != null){
-    const today = d.getDate();
-    if (!state.events || lastDaySeen !== today){
-      state.events = computeDailyEvents(now, state.lat, state.lon);
-      lastDaySeen = today;
-      renderPanel(now);
-    }
-    fitCanvas();
-    drawSky(now);
-    renderPanel(now);
-    ensureNextPlanet(now);
-    renderNextPlanet();
-    ensureMoonEvents(now, state.lat, state.lon);
-    renderMoonEvents(now);
-  }
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 5, 0, Math.PI * 2);
+            ctx.fill();
 
-  if (state.detailsOpenIdx === -1){
-    document.querySelectorAll(".ldCountdownInline").forEach((inlineEl, i) => {
-      const l = state.launches[i];
-      if (l) inlineEl.textContent = countdownText(l);
-    });
-  } else {
-    const l = state.launches[state.detailsOpenIdx];
-    if (l) el("ldWhen").textContent = launchWhenText(l) + countdownText(l);
-  }
-}
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 14px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('N', centerX, centerY - (RADIUS_MILES * pxPerMile) - 20);
+            ctx.fillText('S', centerX, centerY + (RADIUS_MILES * pxPerMile) + 20);
+            ctx.fillText('E', centerX + (RADIUS_MILES * pxPerMile) + 20, centerY);
+            ctx.fillText('W', centerX - (RADIUS_MILES * pxPerMile) - 20, centerY);
 
-function boot(){
-  const saved = loadSavedLocation();
-  if (saved){
-    saveLocation(saved.lat, saved.lon, saved.source);
-    if (saved.source === "gps") requestGps(() => {}); // refresh silently if possible
-  } else {
-    requestGps(() => openLocationModal());
-  }
+            drawAircraft(centerX, centerY, pxPerMile);
+            drawAirports(centerX, centerY, pxPerMile);
+        }
 
-  fetchISS();
-  fetchLaunch();
-  fetchSolar();
-  fetchOcean();
-  fetchOceanME();
-  setInterval(fetchISS, 15000);
-  setInterval(fetchLaunch, 60 * 60 * 1000);
-  setInterval(fetchSolar, 10 * 60 * 1000);
-  setInterval(fetchOcean, 15 * 60 * 1000);
-  setInterval(fetchOceanME, 15 * 60 * 1000);
+        function drawAircraft(centerX, centerY, pxPerMile) {
+            aircraft.forEach((ac, idx) => {
+                const acPoint = map.latLngToContainerPoint([ac.latitude, ac.longitude]);
+                const x = acPoint.x;
+                const y = acPoint.y;
 
-  setInterval(tick, 1000);
-  tick();
-}
+                // Only draw if within canvas bounds (with some margin)
+                if (x < -50 || x > canvas.width + 50 || y < -50 || y > canvas.height + 50) {
+                    return;
+                }
 
-boot();
-</script>
+                // Check if this is the tracked aircraft
+                const isTracked = ac.registration === TRACKED_AIRCRAFT;
+
+                // Determine color: red for tracked, yellow for hovered, cyan for normal
+                if (isTracked) {
+                    ctx.fillStyle = '#ff0000'; // Red for tracked aircraft
+                } else if (hoveredAircraft === idx) {
+                    ctx.fillStyle = '#ffff00'; // Yellow for hovered
+                } else {
+                    ctx.fillStyle = '#00ffff'; // Cyan for normal
+                }
+
+                ctx.beginPath();
+                ctx.arc(x, y, 10, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                ctx.fillStyle = '#000';
+                ctx.font = 'bold 11px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(ac.callsign.substring(0, 3), x, y);
+            });
+        }
+
+        function drawAirports(centerX, centerY, pxPerMile) {
+            AIRPORTS.forEach(ap => {
+                const apPoint = map.latLngToContainerPoint([ap.lat, ap.lon]);
+                const x = apPoint.x;
+                const y = apPoint.y;
+
+                // Only draw if within canvas bounds (with some margin)
+                if (x < -50 || x > canvas.width + 50 || y < -50 || y > canvas.height + 50) {
+                    return;
+                }
+
+                ctx.fillStyle = '#00ff00';
+                ctx.beginPath();
+                ctx.rect(x - 11, y - 8, 22, 16);
+                ctx.fill();
+
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                ctx.fillStyle = '#000';
+                ctx.font = 'bold 11px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(ap.code.length === 4 && ap.code[0] === 'K' ? ap.code.substring(1) : ap.code.substring(0, 3), x, y);
+            });
+        }
+
+        // Vercel backend proxy
+        async function proxyFetch(apiUrl) {
+            const proxyUrl = BACKEND_URL + encodeURIComponent(apiUrl);
+            console.log('Fetching via Vercel backend:', apiUrl);
+
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 15000);
+
+            try {
+                const response = await fetch(proxyUrl, { signal: controller.signal });
+                clearTimeout(timeout);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                return response;
+            } catch (e) {
+                clearTimeout(timeout);
+                throw e;
+            }
+        }
+
+        // Check if a SIGMET is near home
+        function sigmetNearHome(coords) {
+            const MAX_SIGMET_POINTS = 64;
+            const SIGMET_RANGE_MILES = 25;
+            const NM_RANGE = SIGMET_RANGE_MILES / NM_TO_MILES;
+
+            let xs = [], ys = [];
+            let n = 0;
+            const cosLat = Math.cos(USER_LAT * Math.PI / 180);
+
+            for (let c of coords) {
+                if (n >= MAX_SIGMET_POINTS) break;
+                if (!c.lat || !c.lon) continue;
+                xs[n] = (c.lon - USER_LON) * 60 * cosLat;  // nautical miles east
+                ys[n] = (c.lat - USER_LAT) * 60;            // nautical miles north
+                n++;
+            }
+            if (n < 3) return false;
+
+            let inside = false;
+            let minDist = 1e9;
+
+            for (let i = 0, j = n - 1; i < n; j = i++) {
+                let xi = xs[i], yi = ys[i], xj = xs[j], yj = ys[j];
+                if (((yi > 0) !== (yj > 0)) && (0 < (xj - xi) * (0 - yi) / (yj - yi) + xi)) {
+                    inside = !inside;
+                }
+                let dx = xj - xi, dy = yj - yi;
+                let len2 = dx * dx + dy * dy;
+                let t = len2 > 0 ? Math.max(0, Math.min(1, -(xi * dx + yi * dy) / len2)) : 0;
+                let cx = xi + t * dx, cy = yi + t * dy;
+                let d = Math.sqrt(cx * cx + cy * cy);
+                if (d < minDist) minDist = d;
+            }
+            return inside || minDist <= NM_RANGE;
+        }
+
+        // Fetch SIGMETs from aviationweather.gov
+        async function fetchSigmets() {
+            try {
+                const url = 'https://aviationweather.gov/api/data/airsigmet?format=json';
+                const response = await proxyFetch(url);
+                if (!response.ok) throw new Error('SIGMET fetch failed');
+
+                const data = await response.json();
+                let sigmetText = '';
+                let found = 0;
+
+                for (let s of data) {
+                    if (s.airSigmetType !== 'SIGMET') continue;
+                    if (!sigmetNearHome(s.coords)) continue;
+
+                    let hazard = s.hazard || '';
+                    let hazardName = hazard;
+                    if (hazard === 'CONVECTIVE') hazardName = 'Thunderstorms';
+                    else if (hazard === 'TURB') hazardName = 'Turbulence';
+                    else if (hazard === 'ICE') hazardName = 'Icing';
+                    else if (hazard === 'IFR') hazardName = 'IFR';
+                    else if (hazard === 'MTN OBSCN') hazardName = 'Mtn obscuration';
+                    else if (hazard === 'ASH') hazardName = 'Volcanic ash';
+                    else if (hazard === 'TROPICAL CYCLONE' || hazard === 'TC') hazardName = 'Tropical cyclone';
+
+                    let altText = '';
+                    if (s.altitudeHi1 > 0) {
+                        let lowAlt = s.altitudeLow1 >= 18000 ? 'FL' + Math.round(s.altitudeLow1/100) : s.altitudeLow1 + ' ft';
+                        let highAlt = s.altitudeHi1 >= 18000 ? 'FL' + Math.round(s.altitudeHi1/100) : s.altitudeHi1 + ' ft';
+                        altText = ' ' + lowAlt + '-' + highAlt;
+                    }
+
+                    let until = '';
+                    if (s.validTimeTo) {
+                        let dt = new Date(s.validTimeTo);
+                        until = ' until ' + String(dt.getUTCHours()).padStart(2, '0') + String(dt.getUTCMinutes()).padStart(2, '0') + 'Z';
+                    }
+
+                    if (found > 0) sigmetText += '     |     ';
+                    sigmetText += 'SIGMET ' + (s.seriesId || '') + ': ' + hazardName + altText + until;
+                    found++;
+                }
+
+                const sigmetDiv = document.getElementById('sigmetDisplay');
+                if (found === 0) {
+                    sigmetDiv.textContent = 'No SIGMETs within 25 miles';
+                    sigmetDiv.style.color = '#666';
+                } else {
+                    sigmetDiv.textContent = sigmetText;
+                    sigmetDiv.style.color = '#d32f2f';
+                    sigmetDiv.style.fontWeight = 'bold';
+                }
+            } catch (e) {
+                console.log('SIGMET fetch error:', e.message);
+                document.getElementById('sigmetDisplay').textContent = 'SIGMETs unavailable';
+            }
+        }
+
+        // Send notification via ntfy
+        async function sendNtfyNotification(message) {
+            try {
+                const response = await fetch(NTFY_URL, {
+                    method: 'POST',
+                    body: message,
+                    headers: {
+                        'Content-Type': 'text/plain'
+                    }
+                });
+                if (response.ok) {
+                    console.log('Ntfy notification sent:', message);
+                } else {
+                    console.error('Ntfy error:', response.status);
+                }
+            } catch (e) {
+                console.error('Ntfy fetch error:', e.message);
+            }
+        }
+
+        // Use OpenSky Network API
+        async function fetchAircraft() {
+            try {
+                console.log('Fetching aircraft from adsb.lol...');
+                const radiusNm = RADIUS_MILES / NM_TO_MILES;
+                const url = `https://api.adsb.lol/v2/point/${USER_LAT}/${USER_LON}/${radiusNm}`;
+
+                const response = await proxyFetch(url);
+                const data = await response.json();
+
+                console.log('Aircraft received:', data.ac?.length || 0);
+
+                if (!data.ac || data.ac.length === 0) {
+                    aircraftListDiv.innerHTML = '<p style="color: #999; margin: 0;">No aircraft detected</p>';
+                    aircraft = [];
+                    drawRadar();
+                    statusDiv.textContent = 'Radar: Live (none)';
+                    statusDiv.style.background = 'rgba(100,150,0,0.7)';
+                    return;
+                }
+
+                aircraft = data.ac.map(a => {
+                    const distMiles = (a.dst || 0) * NM_TO_MILES;
+
+                    return {
+                        callsign: (a.flight || a.r || a.hex || 'Unknown').trim().toUpperCase(),
+                        icao: a.hex || 'N/A',
+                        registration: a.r || 'N/A',
+                        latitude: a.lat || 0,
+                        longitude: a.lon || 0,
+                        altitude: a.alt_baro !== undefined ? a.alt_baro : a.alt_geom,
+                        altitudeText: a.alt_baro === 'ground' ? 'GND' : (a.alt_baro || a.alt_geom || '?'),
+                        velocity: a.gs ? Math.round(a.gs) : -1,
+                        track: a.track ? Math.round(a.track) : -1,
+                        verticalRate: a.baro_rate || a.geom_rate || 0,
+                        distance: distMiles,
+                        bearing: a.dir !== undefined ? Math.round(a.dir) : -1,
+                        squawk: a.squawk || '-',
+                        category: a.category || '-',
+                        type: a.t || '-'
+                    };
+                }).filter(ac => ac.latitude && ac.longitude);
+
+                // Drop aircraft that have been sitting on the ground for more than a minute
+                const nowMs = Date.now();
+                const seenNow = {};
+                aircraft = aircraft.filter(ac => {
+                    if (ac.altitude !== 'ground') {
+                        return true;                                   // airborne: keep, and forget any ground timer
+                    }
+                    seenNow[ac.icao] = true;
+                    if (!groundSince[ac.icao]) groundSince[ac.icao] = nowMs;   // first time we saw it on the ground
+                    if (ac.registration === TRACKED_AIRCRAFT) return true;     // never hide the watched aircraft
+                    return nowMs - groundSince[ac.icao] < GROUND_HIDE_MS;
+                });
+                Object.keys(groundSince).forEach(hex => { if (!seenNow[hex]) delete groundSince[hex]; });
+
+                // Sort by distance
+                aircraft.sort((a, b) => a.distance - b.distance);
+
+                // Check for tracked aircraft and send notification
+                const trackedFound = aircraft.find(ac => ac.registration === TRACKED_AIRCRAFT);
+                if (trackedFound && !notifiedAircraft[TRACKED_AIRCRAFT]) {
+                    sendNtfyNotification(`${TRACKED_AIRCRAFT} is in the air`);
+                    notifiedAircraft[TRACKED_AIRCRAFT] = true;
+                }
+                // Clear notification flag if tracked aircraft is no longer detected
+                if (!trackedFound) {
+                    notifiedAircraft[TRACKED_AIRCRAFT] = false;
+                }
+
+                console.log('Filtered aircraft:', aircraft.length);
+                updateAircraftList();
+                drawRadar();
+                statusDiv.textContent = `Radar: Live (${aircraft.length})`;
+                statusDiv.style.background = 'rgba(0,150,0,0.7)';
+            } catch (e) {
+                console.error('Aircraft error:', e);
+                statusDiv.textContent = 'Aircraft: Error';
+                statusDiv.style.background = 'rgba(150,0,0,0.7)';
+                aircraftListDiv.innerHTML = '<p class="error-text">Error loading aircraft data</p>';
+            }
+        }
+
+        // ---------- Clock: local time, then UTC in parentheses ----------
+        function updateClock() {
+            const d = new Date();
+            const p2 = n => String(n).padStart(2, '0');
+            document.getElementById('clock').textContent =
+                `${p2(d.getHours())}:${p2(d.getMinutes())} (${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}Z)`;
+        }
+
+        // ---------- KSUA weather: wind, temperature, dew point ----------
+        async function fetchWeather() {
+            try {
+                const url = `https://aviationweather.gov/api/data/metar?format=json&ids=${WIND_STATION}`;
+                const response = await proxyFetch(url);
+                const data = await response.json();
+                if (!Array.isArray(data) || data.length === 0) return;
+                const m = data[0];
+                ksuaMetarData = m;
+
+                // Wind: speed on top, direction below
+                const kts = m.wspd;
+                const gust = m.wgst;
+                const variable = (typeof m.wdir === 'string');          // "VRB"
+                const dir = (typeof m.wdir === 'number') ? m.wdir % 360 : null;
+                let speedText = 'Wind --', dirText = 'Dir --', showArrow = false;
+                if (kts === 0) {
+                    speedText = 'Wind calm';
+                } else if (typeof kts === 'number') {
+                    speedText = 'Wind ' + kts + (gust > kts ? 'G' + gust : '') + ' kt';
+                    if (variable) {
+                        dirText = 'Dir VRB';
+                    } else if (dir !== null) {
+                        dirText = 'Dir ' + String(dir).padStart(3, '0') + '°';
+                        showArrow = true;
+                    }
+                }
+                document.getElementById('wxSpeed').textContent = speedText;
+                document.getElementById('wxDir').textContent = dirText;
+
+                // Wind arrow on the map (the reported direction is where the wind comes FROM)
+                const arrowBox = document.getElementById('windArrow');
+                if (showArrow) {
+                    const toward = WIND_ARROW_POINTS_DOWNWIND ? (dir + 180) % 360 : dir;
+                    document.getElementById('windArrowSvg').style.transform = `rotate(${toward}deg)`;
+                    arrowBox.style.display = 'block';
+                } else {
+                    arrowBox.style.display = 'none';
+                }
+
+                // Temperature and dew point (the METAR gives degrees C)
+                const toF = c => Math.round(c * 9 / 5 + 32);
+                document.getElementById('wxTemp').textContent = typeof m.temp === 'number' ? 'Temp ' + toF(m.temp) + '°F' : 'Temp --';
+                document.getElementById('wxDew').textContent = typeof m.dewp === 'number' ? 'Dew pt ' + toF(m.dewp) + '°F' : 'Dew pt --';
+            } catch (e) {
+                console.log('Weather fetch error:', e.message);   // keep showing the last values
+            }
+        }
+
+        function updateAircraftList() {
+            const sorted = aircraft.slice(0, 12);
+
+            if (sorted.length === 0) {
+                aircraftListDiv.innerHTML = '<p style="color: #999; margin: 0;">No aircraft nearby</p>';
+            } else {
+                aircraftListDiv.innerHTML = sorted.map((ac, idx) => {
+                    const isTracked = ac.registration === TRACKED_AIRCRAFT;
+                    const trackedClass = isTracked ? 'tracked' : '';
+                    return `
+                    <div class="aircraft-item ${trackedClass}"
+                         onmouseover="hoveredAircraft = ${idx}; drawRadar();"
+                         onmouseout="hoveredAircraft = null; drawRadar();"
+                         onclick="showAircraftDetail(${idx});">
+                        <strong>${ac.callsign} ${ac.type || 'N/A'}</strong>
+                        <div class="detail">${ac.distance.toFixed(1)} mi • ${ac.altitudeText} ft</div>
+                        <div class="detail" style="font-size: 11px; color: #0066cc;">
+                            ${ac.velocity >= 0 ? ac.velocity + ' kt' : 'N/A'} •
+                            ${ac.track >= 0 ? ac.track + '°' : 'N/A'} •
+                            ${ac.verticalRate ? (ac.verticalRate > 0 ? '↑' : '↓') + Math.abs(Math.round(ac.verticalRate)) : '—'} ft/m
+                        </div>
+                    </div>
+                `;
+                }).join('');
+            }
+        }
+
+        function updateAirportList() {
+            const sorted = AIRPORTS.map(ap => {
+                const dlat = ap.lat - USER_LAT;
+                const dlon = (ap.lon - USER_LON) * Math.cos(USER_LAT * Math.PI / 180);
+                const dist = Math.sqrt(dlat*dlat + dlon*dlon) * 69;
+                return { ...ap, dist };
+            }).sort((a, b) => a.dist - b.dist);
+
+            let html = '';
+            sorted.forEach(ap => {
+                html += `
+                    <div class="airport-item" onclick="showAirportDetail('${ap.code}')">
+                        <strong>${ap.code}</strong> ${ap.name}
+                        <div class="distance">${ap.dist.toFixed(1)} mi</div>
+                    </div>
+                `;
+                // Add KSUA buttons after SUA airport
+                if (ap.code === 'SUA') {
+                    html += `<div class="ksua-live-atc-link" onclick="openLiveATC()">Stuart Ground/Tower</div>`;
+                    html += `<div class="ksua-live-atc-link" onclick="openPBIDeparture()">Palm Beach DEP</div>`;
+                    html += `<div class="ksua-weather-link" onclick="openKSUAWeather()">KSUA Weather</div>`;
+                }
+                // Add Vero Tower button after VRB airport
+                if (ap.code === 'VRB') {
+                    html += `<div class="ksua-live-atc-link" onclick="openVeroTower()">Vero Tower</div>`;
+                }
+                // Add KFPR Tower button after KFPR airport
+                if (ap.code === 'KFPR') {
+                    html += `<div class="ksua-live-atc-link" onclick="openKFPRTower()">KFPR Tower</div>`;
+                }
+                // Add PBI buttons after PBI airport
+                if (ap.code === 'PBI') {
+                    html += `<div class="ksua-live-atc-link" onclick="openPBITower()">PBI Tower</div>`;
+                }
+            });
+            document.getElementById('airportList').innerHTML = html;
+        }
+
+        function showAircraftDetail(idx) {
+            const ac = aircraft[idx];
+            const bearing = ac.bearing >= 0 ? ac.bearing : 0;
+            const bearingText = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'][Math.round((bearing + 360) % 360 / 22.5) % 16];
+
+            document.getElementById('detailCallsign').textContent = ac.callsign || 'Unknown';
+            const rows = `
+                <tr><td>Registration</td><td>${ac.registration}</td></tr>
+                <tr><td>ICAO (Hex)</td><td style="font-family: monospace;">${ac.icao}</td></tr>
+                <tr><td>Latitude</td><td>${ac.latitude.toFixed(4)}°</td></tr>
+                <tr><td>Longitude</td><td>${ac.longitude.toFixed(4)}°</td></tr>
+                <tr><td>Altitude</td><td>${ac.altitudeText} ft</td></tr>
+                <tr><td>Velocity</td><td>${ac.velocity >= 0 ? ac.velocity + ' kt' : 'N/A'}</td></tr>
+                <tr><td>Track</td><td>${ac.track >= 0 ? ac.track + '°' : 'N/A'}</td></tr>
+                <tr><td>Vertical Rate</td><td>${ac.verticalRate ? Math.round(ac.verticalRate) + ' ft/m' : 'N/A'}</td></tr>
+                <tr><td>Distance</td><td>${ac.distance.toFixed(1)} miles</td></tr>
+                <tr><td>Bearing</td><td>${ac.bearing >= 0 ? ac.bearing + '° (' + bearingText + ')' : 'N/A'}</td></tr>
+                <tr><td>Squawk</td><td>${ac.squawk}</td></tr>
+                <tr><td>Type</td><td>${ac.type}</td></tr>
+            `;
+            document.getElementById('detailTable').innerHTML = rows;
+            detailModal.classList.add('active');
+        }
+
+        // Map of airport codes to their diagram/photo file extensions
+        const airportDiagrams = {
+            'BCT': 'pdf',
+            'OBK': 'jpg',
+            'PBI': 'pdf',
+            'SUA': 'pdf',
+            'VRB': 'pdf',
+            'KFPR': 'pdf'
+        };
+
+        // The saved diagram file for KFPR is still named X21.pdf
+        const diagramFileNames = { 'KFPR': 'X21' };
+
+        function showAirportDetail(code) {
+            const ap = AIRPORTS.find(a => a.code === code);
+            if (!ap) return;
+
+            // Directly open the diagram if available
+            if (airportDiagrams[code]) {
+                const ext = airportDiagrams[code];
+                const diagramUrl = `https://cdn.jsdelivr.net/gh/drewflhr-cmyk/local_aviation@main/public/images/airports/${diagramFileNames[code] || code}.${ext}`;
+                window.open(diagramUrl, '_blank');
+            }
+        }
+
+        function openLiveATC() {
+            // Open LiveATC link in a new tab
+            window.open('https://www.liveatc.net/search/?icao=ksua', '_blank');
+        }
+
+        function openPBITower() {
+            // Open PBI Tower LiveATC link in a new tab
+            window.open('https://www.liveatc.net/hlisten.php?mount=kpbi2_twr&icao=kdjt', '_blank');
+        }
+
+        function openVeroTower() {
+            // Open Vero Beach Tower LiveATC link in a new tab
+            window.open('https://www.liveatc.net/hlisten.php?mount=kvrb_twr&icao=kvrb', '_blank');
+        }
+
+        function openKFPRTower() {
+            // Open Fort Pierce Ground/Tower LiveATC link in a new tab
+            window.open('https://www.liveatc.net/hlisten.php?mount=kfpr3_gnd_twr&icao=kfpr', '_blank');
+        }
+
+        function openPBIDeparture() {
+            // Open PBI Departure LiveATC link in a new tab
+            window.open('https://www.liveatc.net/hlisten.php?mount=kpbi2_dep_n&icao=kdjt', '_blank');
+        }
+
+        function openKSUAWeather() {
+            // Try to open in a popup window, fall back to opening in new tab if popup is blocked
+            const popup = window.open(ksuaWeatherUrl, 'KSUA_Weather', 'width=1000,height=800');
+            if (!popup) {
+                window.open(ksuaWeatherUrl, '_blank');
+            }
+        }
+
+        canvas.addEventListener('click', (e) => {
+            const containerRect = container.getBoundingClientRect();
+            const clickX = e.clientX - containerRect.left;
+            const clickY = e.clientY - containerRect.top;
+
+            // Check aircraft
+            for (let i = 0; i < aircraft.length; i++) {
+                const ac = aircraft[i];
+                const acPoint = map.latLngToContainerPoint([ac.latitude, ac.longitude]);
+
+                if (Math.hypot(clickX - acPoint.x, clickY - acPoint.y) < 12) {
+                    showAircraftDetail(i);
+                    return;
+                }
+            }
+
+            // Check airports
+            for (let i = 0; i < AIRPORTS.length; i++) {
+                const ap = AIRPORTS[i];
+                const apPoint = map.latLngToContainerPoint([ap.lat, ap.lon]);
+
+                if (Math.hypot(clickX - apPoint.x, clickY - apPoint.y) < 12) {
+                    showAirportDetail(ap.code);
+                    return;
+                }
+            }
+        });
+
+        window.addEventListener('resize', resizeCanvas);
+
+        initMap();
+        resizeCanvas();
+        updateAirportList();
+        fetchAircraft();
+        fetchSigmets();
+        fetchWeather();
+        updateClock();
+
+        // Refresh aircraft every 10 seconds, SIGMETs every 5 minutes, weather every 10 minutes
+        setInterval(fetchAircraft, 10000);
+        setInterval(fetchSigmets, 5 * 60 * 1000);
+        setInterval(fetchWeather, 10 * 60 * 1000);
+        setInterval(updateClock, 1000);
+
+        console.log('Radar ready - using adsb.lol API');
+    </script>
 </body>
 </html>
