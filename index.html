@@ -797,11 +797,13 @@ const ISS_REQUIRE_SUNLIT = true;  // set to false to ignore condition 3
 const ISS_SEARCH_HOURS = 48;      // how far ahead to look
 const ISS_STEP_SEC = 20;          // how finely to step through time while searching
 
-// "ISS Tracker" link: tries the Spot the Station app first, otherwise opens the NASA page.
-// A web page cannot ask the phone "is this app installed?", so it tries the app's own address and,
-// if the page is still showing a moment later, assumes the app is missing and opens the website.
-// This runs your iPhone shortcut named "Open Spot the Station". Set the scheme to "" to skip the app and go straight to the website.
-const SPOT_THE_STATION_SCHEME = "shortcuts://run-shortcut?name=" + encodeURIComponent("Open Spot the Station");
+// "ISS Tracker" link: runs your iPhone shortcut (which opens the Spot the Station app); if that doesn't work, opens the NASA page.
+// A web page cannot ask the phone "is this app installed?", so there are two safety nets (see openISSTracker):
+//   1) x-error: asks the Shortcuts app to open the NASA page itself if the shortcut fails or is missing
+//   2) a timer/return check: if you come back to this page quickly, the app did not really open, so it opens the NASA page
+// Set SPOT_THE_STATION_SHORTCUT to "" to skip the app and go straight to the website.
+const SPOT_THE_STATION_SHORTCUT = "Open Spot the Station";   // exact name of your shortcut
+const RETURN_FALLBACK_SEC = 20;   // coming back to the page within this many seconds counts as "app did not open"
 const SPOT_THE_STATION_URL = "https://www.nasa.gov/spot-the-station/";
 
 async function fetchISSOrbit(){
@@ -894,15 +896,21 @@ function issSightingDetail(){
 
 // "ISS Tracker" link
 function openISSTracker(){
-  if (!SPOT_THE_STATION_SCHEME){ window.open(SPOT_THE_STATION_URL, "_blank"); return; }
-  let leftPage = false;
-  const onVis = () => { if (document.hidden) leftPage = true; };   // the page goes to the background if the app opens
+  if (!SPOT_THE_STATION_SHORTCUT){ window.open(SPOT_THE_STATION_URL, "_blank"); return; }
+  let hiddenAt = null, done = false;
+  const goToWebsite = () => { if (done) return; done = true; cleanup(); window.location.href = SPOT_THE_STATION_URL; };
+  const onVis = () => {
+    if (document.hidden){ hiddenAt = Date.now(); return; }     // the page went to the background (Shortcuts or the app opened)
+    // Page is visible again. A quick return means the shortcut failed (e.g. "shortcut not found"), so use the website.
+    if (hiddenAt && Date.now() - hiddenAt < RETURN_FALLBACK_SEC * 1000) goToWebsite();
+  };
+  const timer = setTimeout(() => { if (!hiddenAt && !document.hidden) goToWebsite(); }, 1500);   // nothing happened at all
+  const cleanup = () => { clearTimeout(timer); document.removeEventListener("visibilitychange", onVis); };
   document.addEventListener("visibilitychange", onVis);
-  window.location.href = SPOT_THE_STATION_SCHEME;
-  setTimeout(() => {
-    document.removeEventListener("visibilitychange", onVis);
-    if (!leftPage && !document.hidden) window.location.href = SPOT_THE_STATION_URL;   // app did not open: use the website
-  }, 1500);
+  setTimeout(cleanup, 120000);                                  // stop watching after 2 minutes
+  // x-callback-url form: x-error is the address Shortcuts opens if running the shortcut fails
+  window.location.href = "shortcuts://x-callback-url/run-shortcut?name=" + encodeURIComponent(SPOT_THE_STATION_SHORTCUT) +
+                         "&x-error=" + encodeURIComponent(SPOT_THE_STATION_URL);
 }
 
 function shortPad(p){
