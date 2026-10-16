@@ -803,7 +803,7 @@ const ISS_STEP_SEC = 20;          // how finely to step through time while searc
 //   2) a timer/return check: if you come back to this page quickly, the app did not really open, so it opens the NASA page
 // Set SPOT_THE_STATION_SHORTCUT to "" to skip the app and go straight to the website.
 const SPOT_THE_STATION_SHORTCUT = "Open Spot the Station";   // exact name of your shortcut
-const RETURN_FALLBACK_SEC = 20;   // coming back to the page within this many seconds counts as "app did not open"
+const RETURN_FALLBACK_SEC = 0;   // coming back to the page within this many seconds counts as "app did not open"
 const SPOT_THE_STATION_URL = "https://www.nasa.gov/spot-the-station/";
 
 async function fetchISSOrbit(){
