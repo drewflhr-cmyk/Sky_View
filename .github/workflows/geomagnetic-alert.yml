@@ -1,0 +1,69 @@
+# Checks NOAA for a geomagnetic storm (G1 or higher) every 15 minutes and sends an ntfy alert.
+# Put this file in your repo at:  .github/workflows/geomagnetic-alert.yml
+name: Geomagnetic storm alert
+ 
+on:
+  schedule:
+    - cron: "*/15 * * * *"      # every 15 minutes (GitHub may run it a few minutes late)
+  workflow_dispatch:            # adds a "Run workflow" button in the Actions tab
+    inputs:
+      test_alert:
+        description: "Send a fake test alert to ntfy"
+        type: boolean
+        default: false
+ 
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check NOAA and notify
+        env:
+          TEST_ALERT: ${{ inputs.test_alert }}
+        run: |
+          python3 - <<'PY'
+          # Checks NOAA's current geomagnetic storm level (G-scale) and sends an ntfy push when it is G1 or higher.
+          import json, os, urllib.request
+ 
+          TOPIC = os.environ.get("NTFY_TOPIC", "Geomagnetic_storm")   # your ntfy topic
+          MIN_LEVEL = 1                                                # alert at this G level and above
+          TEST = os.environ.get("TEST_ALERT", "false") == "true"       # true = send a fake test alert
+ 
+          def get(url):
+              with urllib.request.urlopen(url, timeout=30) as r:
+                  return r.read().decode()
+ 
+          def send(title, message, priority, tags):
+              req = urllib.request.Request("https://ntfy.sh/" + TOPIC, data=message.encode(), method="POST")
+              req.add_header("Title", title)            # headline of the notification
+              req.add_header("Priority", str(priority)) # 1 (min) .. 5 (urgent)
+              req.add_header("Tags", tags)              # emoji shortcodes shown on the notification
+              req.add_header("Click", "https://www.swpc.noaa.gov/")   # tapping the notification opens this
+              urllib.request.urlopen(req, timeout=30).read()
+ 
+          if TEST:
+              send("TEST: Geomagnetic storm G1 (Minor)", "This is only a test alert from your GitHub workflow.", 3, "test_tube,satellite")
+              print("Test alert sent")
+              raise SystemExit
+ 
+          # Same NOAA feed the Sky View page uses. Entry "0" is today's scales; "G" holds the geomagnetic storm level.
+          g = json.loads(get("https://services.swpc.noaa.gov/products/noaa-scales.json"))["0"]["G"]
+          level = int(g["Scale"])
+          text = g.get("Text") or "storm"
+          print("Current G-scale:", level, text)
+          if level < MIN_LEVEL:
+              raise SystemExit
+ 
+          # Avoid repeat alerts: ask ntfy what was already sent in the last 24 h and skip if this level was announced.
+          title = "Geomagnetic storm G%d (%s)" % (level, text.title())
+          sent = []
+          for line in get("https://ntfy.sh/" + TOPIC + "/json?poll=1&since=24h").splitlines():
+              if line.strip():
+                  sent.append(json.loads(line).get("title", ""))
+          if title in sent:
+              print("Already announced, skipping")
+              raise SystemExit
+ 
+          send(title, "NOAA reports G%d (%s) conditions. Aurora may be visible at lower latitudes tonight." % (level, text), 3 if level < 3 else 4, "satellite,sparkles")
+          print("Alert sent:", title)
+          PY
+ 
