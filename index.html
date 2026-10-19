@@ -215,7 +215,7 @@
   <div class="modalCard">
     <div class="closeRow"><button id="objClose">Close</button></div>
     <h2 id="objName">--</h2>
-    <div class="launchDesc" id="objDesc" style="-webkit-line-clamp:unset; display:block;">--</div>
+    <div class="launchDesc" id="objDesc" style="-webkit-line-clamp:unset; display:block; white-space:pre-line;">--</div>
   </div>
 </div>
 
@@ -419,6 +419,28 @@ const STARS = [
 // A handful of easy-to-recognize constellations (J2000 RA/Dec), each as a small
 // set of member stars plus line segments connecting them by index, and an
 // "anchor" index used to place the name label.
+/* =====================================================================
+   DEEP-SKY OBJECT: Andromeda Galaxy (M31)
+   raH = right ascension in hours, dec = declination in degrees (J2000),
+   majorDeg = apparent length in degrees, posAngle = tilt of its long axis
+   (degrees from north toward east). It is drawn as a faint tilted oval.
+   ===================================================================== */
+const ANDROMEDA = {
+  name: "Andromeda Galaxy (M31)",
+  label: "Andromeda Galaxy",
+  raH: 0.7123, dec: 41.269,
+  majorDeg: 3.0, posAngle: 35,
+  desc: "The Andromeda Galaxy (also called M31 or NGC 224) is the nearest large galaxy to our own Milky Way, about 2.5 million light-years away — the light you see left it before humans existed. " +
+        "It is a huge spiral of roughly a trillion stars, around 220,000 light-years across, about twice the width of the Milky Way. " +
+        "\n\nTo the naked eye it shows as a faint, elongated smudge of light (magnitude about 3.4) — among the most distant things you can see without a telescope. " +
+        "Its true size on the sky is about 3 degrees, roughly six full Moons side by side, though only its bright core shows from most places; this map draws it larger than a point so you can find it. " +
+        "\n\nHow to find it: on autumn evenings, start at the Great Square of Pegasus and follow the chain of stars of the constellation Andromeda (the princess of Greek myth who was rescued by Perseus) out from the square's corner to the star Mirach. " +
+        "Hop up two more stars (to Mu Andromedae), then the same distance again, and the galaxy glows there. A dark sky away from city lights helps a lot; binoculars show it clearly as an oval glow with a brighter center, and two small companion galaxies, M32 and M110, sit close beside it. " +
+        "\n\nIt was recorded by the Persian astronomer al-Sufi around 964 AD as a 'small cloud', and in 1923 Edwin Hubble used a variable star in it to prove it lies far beyond the Milky Way — showing our galaxy is just one of many. " +
+        "\n\nAndromeda is moving toward us at about 110 km/s (roughly 250,000 mph), and in billions of years the two galaxies are expected to merge into one. " +
+        "Best seen from September through December; from Jensen Beach it climbs to about 76 degrees up (nearly overhead) when it crosses due south."
+};
+
 const CONSTELLATIONS = [
   { name: "Orion", anchor: 0, desc: "The Hunter — one of the most recognizable constellations in the sky, anchored by three evenly-spaced stars forming Orion's Belt (Mintaka, Alnilam, Alnitak) and flanked by the bright red supergiant Betelgeuse on one shoulder and the blue supergiant Rigel at his foot. Hanging just below the belt is the Orion Nebula, a vast stellar nursery where new stars are actively being born — visible even in binoculars as a fuzzy patch. Best seen in winter evenings, straddling the celestial equator so it's visible from nearly everywhere on Earth.", stars: [
       { raH: 5.9195, dec: 7.407 },    // 0 Betelgeuse
@@ -1409,6 +1431,39 @@ function drawSky(now){
       ctx.beginPath(); ctx.arc(p.x, p.y, starR, 0, Math.PI*2); ctx.fill();
       drawLabel(ctx, s.name, p.x, p.y, "rgba(150,150,175,0.85)", W, labelFont);
       state.mapObjects.push({ x: p.x, y: p.y, r: Math.max(9 * sc, starR + 6), name: s.name, desc: s.desc });
+    }
+
+    // Andromeda Galaxy (M31): a faint tilted oval so it reads as a galaxy, not a star.
+    {
+      const g = ANDROMEDA;
+      const gh = equatorialToHorizon(g.raH * 15, g.dec, lst, state.lat);
+      const gu = gh.alt > 0 ? plotUnit(gh.alt, gh.az) : null;
+      if (gu){
+        const gc = toPx(gu);
+        // Which way does the galaxy's long axis point on the screen? Calculate a point half a
+        // galaxy-length away along its position angle (north toward east) and see where it lands.
+        const half = g.majorDeg / 2, pa = g.posAngle * RAD;
+        const dDec = half * Math.cos(pa);
+        const dRaDeg = half * Math.sin(pa) / Math.cos(g.dec * RAD);
+        const gh2 = equatorialToHorizon(g.raH * 15 + dRaDeg, g.dec + dDec, lst, state.lat);
+        const gu2 = plotUnit(gh2.alt, gh2.az);
+        let ang = -0.6, rx = 9 * sc;                  // fallback tilt/size if that point is below the horizon
+        if (gu2){
+          const g2 = toPx(gu2);
+          ang = Math.atan2(g2.y - gc.y, g2.x - gc.x);
+          rx = Math.max(rx, Math.hypot(g2.x - gc.x, g2.y - gc.y));   // never smaller than 9 map-units (so it stays visible)
+        }
+        const ry = rx * 0.4;                          // the real galaxy is about 3 times longer than wide
+        // Three stacked ovals, each smaller and brighter, give a soft glow with a bright center
+        for (const [k, a] of [[1.0, 0.13], [0.68, 0.18], [0.38, 0.30]]){
+          ctx.fillStyle = "rgba(175,190,235," + a + ")";
+          ctx.beginPath(); ctx.ellipse(gc.x, gc.y, rx * k, ry * k, ang, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.fillStyle = "rgba(240,244,255,0.9)";
+        ctx.beginPath(); ctx.arc(gc.x, gc.y, 1.3 * sc, 0, Math.PI * 2); ctx.fill();     // bright core
+        drawLabel(ctx, g.label, gc.x + rx * 0.5, gc.y, "rgba(150,165,205,0.9)", W, labelFont);
+        state.mapObjects.push({ x: gc.x, y: gc.y, r: Math.max(12 * sc, rx + 4), name: g.name, desc: g.desc });
+      }
     }
 
     // A few well-known constellation outlines (faint connecting lines + unlabeled
